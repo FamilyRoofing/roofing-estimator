@@ -597,12 +597,6 @@ export default function EstimatorPage() {
                 </div>
                 <div className="col-span-2 text-xs text-center text-muted-foreground">FT</div>
               </div>
-              {dripEdgeTotal > 0 && (
-                <div className="flex justify-between items-center mb-2 px-2 py-1.5 bg-muted/30 rounded text-xs">
-                  <span className="text-muted-foreground">Drip Edge Price</span>
-                  <span className="font-semibold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
-                </div>
-              )}
               <SalesQtyRow label="Alum. Step Flashing" qty={stepFlashingQty} setQty={setStepFlashingQty} unit="FT" />
               <SalesQtyRow label="Trim Coil" qty={trimCoilQty} setQty={setTrimCoilQty} unit="FT" />
 
@@ -647,10 +641,6 @@ export default function EstimatorPage() {
                     <div className="col-span-1 flex justify-end">
                       <Button variant="ghost" size="sm" onClick={() => removeSkylight(sk.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 size={13} /></Button>
                     </div>
-                  </div>
-                  <div className="flex justify-between items-center mt-1 px-2 py-1.5 bg-muted/30 rounded text-xs">
-                    <span className="text-muted-foreground">Skylight Price</span>
-                    <span className="font-semibold text-foreground">{fmtBig(salesPrice(sk.lineTotal))}</span>
                   </div>
                 </div>
               ))}
@@ -740,6 +730,26 @@ export default function EstimatorPage() {
                     </button>
                   </div>
                 </div>
+
+                {/* Drip Edge & Skylight line prices */}
+                {dripEdgeTotal > 0 && (
+                  <div className="flex items-center justify-between px-4 py-2 border border-border rounded-lg">
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">Drip Edge</div>
+                      <div className="text-xs text-muted-foreground">{num(dripEdgeQty)} FT — {dripEdgeColor}</div>
+                    </div>
+                    <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
+                  </div>
+                )}
+                {skylights.map(sk => (
+                  <div key={sk.id} className="flex items-center justify-between px-4 py-2 border border-border rounded-lg">
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">Skylight — {sk.model}</div>
+                      <div className="text-xs text-muted-foreground">{sk.qty} EA — {sk.size}</div>
+                    </div>
+                    <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(sk.lineTotal))}</span>
+                  </div>
+                ))}
 
                 {/* Total Price */}
                 <div className="flex items-center justify-between py-3 bg-primary/5 rounded-lg px-4">
