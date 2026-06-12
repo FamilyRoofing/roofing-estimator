@@ -224,6 +224,9 @@ export default function EstimatorPage() {
   const [deckingThickness, setDeckingThickness] = useState("7/16\"");
   const [deckingType, setDeckingType] = useState("OSB");
 
+  const [flintlasticQty, setFlintlasticQty] = useState("");
+  const FLINTLASTIC_PRICE = 301;
+
   // Auto-fill underlayment with total sq + waste
   useEffect(() => {
     if (totalWithWaste > 0) setUnderlaymentQty(String(totalWithWaste));
@@ -263,6 +266,7 @@ export default function EstimatorPage() {
   const skylightsTotal    = skylights.reduce((s, sk) => s + sk.lineTotal, 0);
   const ridgeVentTotal    = ridgeVentTotal2(num(ridgeVentQty));
   const deckingTotal      = num(deckingQty) * num(deckingPrice);
+  const flintlasticTotal  = roundUp(num(flintlasticQty)) * FLINTLASTIC_PRICE;
 
   // Effective per-unit display rates (for admin view $/Unit column)
   const qUL = num(underlaymentQty);  const rateUL = qUL > 0 ? underlayTotal / qUL : UL_ROLL_COST / UL_ROLL_SQ;
@@ -276,7 +280,7 @@ export default function EstimatorPage() {
   const A = shingleTotal + landmarkProTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
     ridgeCapTotal + iceWaterTotal + dripEdgeTotal + stepFlashTotal +
     trimCoilTotal + pipeBootsTotal + bayWindowsTotal + skylightsTotal +
-    ridgeVentTotal + deckingTotal + referralFee + MISC_AMOUNT;
+    ridgeVentTotal + deckingTotal + flintlasticTotal + referralFee + MISC_AMOUNT;
   const B = A * markupRate;
   const E = A + B;
   // Commission is X% of Total Price: Total = E / (1 - rate), F = Total * rate
@@ -636,6 +640,7 @@ export default function EstimatorPage() {
 
               <Separator className="my-2" />
               <SalesGroupLabel>Other</SalesGroupLabel>
+              <SalesQtyRow label="Flintlastic" qty={flintlasticQty} setQty={setFlintlasticQty} unit="SQ" />
               <SalesQtyRow label="Ridge Vent" qty={ridgeVentQty} setQty={setRidgeVentQty} unit="LF" />
               {/* Decking: thickness + type selectors */}
               <div className="grid grid-cols-12 gap-2 items-center mb-1">
@@ -929,6 +934,7 @@ export default function EstimatorPage() {
 
               <Separator className="my-2" />
               <GroupLabel>Other</GroupLabel>
+              <ARow label="Flintlastic" qty={String(roundUp(num(flintlasticQty)))} setQty={setFlintlasticQty} unit="SQ" price={String(FLINTLASTIC_PRICE)} setPrice={() => {}} total={flintlasticTotal} readonlyPrice />
               <ARow label="Ridge Vent" qty={ridgeVentQty} setQty={setRidgeVentQty} unit="LF" price={rateRV.toFixed(4)} setPrice={() => {}} total={ridgeVentTotal} readonlyPrice />
               {/* Decking with thickness + type selectors */}
               <div className="grid grid-cols-12 gap-2 items-center mb-1">
