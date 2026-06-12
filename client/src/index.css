@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 215 25% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+    --primary: 213 85% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 93%;
+    --secondary-foreground: 215 25% 25%;
+    --muted: 210 20% 94%;
+    --muted-foreground: 215 15% 50%;
+    --accent: 213 85% 35%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 20% 88%;
+    --input: 210 20% 88%;
+    --ring: 213 85% 35%;
+    --radius: 0.5rem;
+    --sidebar-background: 215 30% 18%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 213 85% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 25% 25%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 215 25% 25%;
+    --sidebar-ring: 213 85% 55%;
+  }
+
+  .dark {
+    --background: 215 30% 10%;
+    --foreground: 210 20% 95%;
+    --card: 215 28% 14%;
+    --card-foreground: 210 20% 95%;
+    --popover: 215 28% 14%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 213 85% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 25% 20%;
+    --secondary-foreground: 210 20% 90%;
+    --muted: 215 25% 20%;
+    --muted-foreground: 215 15% 60%;
+    --accent: 213 85% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 25% 22%;
+    --input: 215 25% 22%;
+    --ring: 213 85% 55%;
+    --sidebar-background: 215 35% 8%;
+    --sidebar-foreground: 210 20% 88%;
+    --sidebar-primary: 213 85% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 30% 14%;
+    --sidebar-accent-foreground: 210 20% 88%;
+    --sidebar-border: 215 30% 14%;
+    --sidebar-ring: 213 85% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
+  }
+}
+
+.section-card {
+  @apply bg-card border border-border rounded-lg p-4 mb-4;
+}
+
+.field-row {
+  @apply grid grid-cols-12 gap-2 items-center mb-2;
+}
+
+.label-col {
+  @apply col-span-4 text-sm font-medium text-foreground;
+}
+
+.input-col {
+  @apply col-span-2;
+}
+
+.unit-col {
+  @apply col-span-1 text-xs text-muted-foreground text-center;
+}
+
+.price-col {
+  @apply col-span-2;
+}
+
+.total-col {
+  @apply col-span-3 text-right text-sm font-semibold;
+}
+
+.section-header {
+  @apply text-sm font-bold uppercase tracking-wider text-primary mb-3 pb-2 border-b border-border;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
