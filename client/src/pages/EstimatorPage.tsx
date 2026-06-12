@@ -286,7 +286,12 @@ export default function EstimatorPage() {
   // Commission is X% of Total Price: Total = E / (1 - rate), F = Total * rate
   const grandTotal = E / (1 - commissionRate);
   const F = grandTotal * commissionRate;
-  const pricePerSq = totalWithWaste > 0 ? grandTotal / totalWithWaste : 0;
+  // Price per SQ denominator includes starter & hip & ridge bundles (3 bundles = 1 SQ)
+  const starterBundles  = roundUp(num(starterQty) / ST_BUNDLE_LF);
+  const hipRidgeBundles = roundUp(num(ridgeCapQty) / HR_BUNDLE_LF);
+  const accessorySq     = (starterBundles + hipRidgeBundles) / 3;
+  const totalSqForPrice = totalWithWaste + accessorySq;
+  const pricePerSq = totalSqForPrice > 0 ? grandTotal / totalSqForPrice : 0;
 
   // Proportional sales price: distributes markup + commission across raw cost
   // salesPrice(x) = (x / A) * grandTotal — all line prices sum to grandTotal
@@ -772,7 +777,7 @@ export default function EstimatorPage() {
                 <div className="flex items-center justify-between px-4 py-2 border border-border rounded-lg">
                   <div>
                     <div className="text-sm font-semibold text-foreground">Price per Square</div>
-                    <div className="text-xs text-muted-foreground">{totalWithWaste.toFixed(2)} SQ with waste</div>
+                    <div className="text-xs text-muted-foreground">{totalSqForPrice.toFixed(2)} SQ (incl. starter & hip/ridge)</div>
                   </div>
                   <span className="text-lg font-bold text-foreground" data-testid="sales-price-per-sq">
                     {pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}
@@ -1061,7 +1066,7 @@ export default function EstimatorPage() {
                   <span>F — Commission ({leadType === "office" ? "10%" : "12%"} of Total)</span>
                   <span className="font-semibold">{fmtBig(F)}</span>
                 </div>
-                <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalWithWaste.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
+                <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
               </div>
             </div>
 
