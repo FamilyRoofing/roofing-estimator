@@ -288,6 +288,13 @@ export default function EstimatorPage() {
   const F = grandTotal * commissionRate;
   const pricePerSq = totalWithWaste > 0 ? grandTotal / totalWithWaste : 0;
 
+  // Proportional sales price: distributes markup + commission across raw cost
+  // salesPrice(x) = (x / A) * grandTotal — all line prices sum to grandTotal
+  function salesPrice(rawCost: number): number {
+    if (!A || A <= 0) return 0;
+    return (rawCost / A) * grandTotal;
+  }
+
   const isAdmin = role === "admin";
 
   // ─── Section helpers ──────────────────────────────────────────────────────
@@ -590,6 +597,12 @@ export default function EstimatorPage() {
                 </div>
                 <div className="col-span-2 text-xs text-center text-muted-foreground">FT</div>
               </div>
+              {dripEdgeTotal > 0 && (
+                <div className="flex justify-between items-center mb-2 px-2 py-1.5 bg-muted/30 rounded text-xs">
+                  <span className="text-muted-foreground">Drip Edge Price</span>
+                  <span className="font-semibold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
+                </div>
+              )}
               <SalesQtyRow label="Alum. Step Flashing" qty={stepFlashingQty} setQty={setStepFlashingQty} unit="FT" />
               <SalesQtyRow label="Trim Coil" qty={trimCoilQty} setQty={setTrimCoilQty} unit="FT" />
 
@@ -634,6 +647,10 @@ export default function EstimatorPage() {
                     <div className="col-span-1 flex justify-end">
                       <Button variant="ghost" size="sm" onClick={() => removeSkylight(sk.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 size={13} /></Button>
                     </div>
+                  </div>
+                  <div className="flex justify-between items-center mt-1 px-2 py-1.5 bg-muted/30 rounded text-xs">
+                    <span className="text-muted-foreground">Skylight Price</span>
+                    <span className="font-semibold text-foreground">{fmtBig(salesPrice(sk.lineTotal))}</span>
                   </div>
                 </div>
               ))}
