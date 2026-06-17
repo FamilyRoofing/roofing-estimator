@@ -1,4 +1,4 @@
-import { Switch, Route, Router, useLocation } from "wouter";
+import { Switch, Route, Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
@@ -15,7 +15,7 @@ import { LogOut, Users } from "lucide-react";
 // ── Authenticated shell with shared header ─────────────────────────────────
 function AuthenticatedApp() {
   const { user, logout } = useAuth();
-  const [location, setLocation] = useLocation();
+  const [location, setLocation] = useHashLocation();
 
   return (
     <div className="min-h-screen bg-background">
