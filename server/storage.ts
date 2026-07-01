@@ -1,11 +1,20 @@
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
+import path from "path";
+import fs from "fs";
 import { estimates, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { InsertEstimate, Estimate, User } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
-const sqlite = new Database("data.db");
+// Use /data volume on Railway (persistent), fall back to local for dev
+const DB_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+  ? process.env.RAILWAY_VOLUME_MOUNT_PATH
+  : path.resolve(".");
+if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+const DB_PATH = path.join(DB_DIR, "data.db");
+const sqlite = new Database(DB_PATH);
+console.log("[db] using", DB_PATH);
 const db = drizzle(sqlite);
 
 // ─── Bootstrap tables (ADD COLUMN if missing, never DROP) ─────────────────────
