@@ -9,10 +9,40 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+
+/**
+ * Supports two calling styles so existing call sites keep working:
+ *   apiRequest(url, { method, body, headers })          <- new style
+ *   apiRequest(method, url, data)                       <- old style
+ */
 export async function apiRequest(
-  url: string,
-  options?: RequestInit,
+  urlOrMethod: string,
+  optionsOrUrl?: RequestInit | string,
+  maybeData?: unknown,
 ): Promise<any> {
+  let url: string;
+  let options: RequestInit;
+
+  const looksLikeOldStyle =
+    typeof optionsOrUrl === "string" &&
+    HTTP_METHODS.includes(urlOrMethod.toUpperCase());
+
+  if (looksLikeOldStyle) {
+    // Old-style call: apiRequest(method, url, data)
+    url = optionsOrUrl as string;
+    options = {
+      method: urlOrMethod.toUpperCase(),
+      ...(maybeData !== undefined
+        ? { body: JSON.stringify(maybeData) }
+        : {}),
+    };
+  } else {
+    // New-style call: apiRequest(url, options)
+    url = urlOrMethod;
+    options = (optionsOrUrl as RequestInit) ?? {};
+  }
+
   const res = await fetch(`${API_BASE}${url}`, {
     credentials: "include",
     headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
