@@ -440,8 +440,7 @@ export default function EstimatorPage() {
     mutationFn: async (data: any) => {
       const url = isNew ? "/api/estimates" : `/api/estimates/${params.id}`;
       const method = isNew ? "POST" : "PUT";
-      const res = await apiRequest(method, url, data);
-      return res.json();
+      return await apiRequest(method, url, data);
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/estimates"] });
