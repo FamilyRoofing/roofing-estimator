@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -6,6 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Plus, FileText, Trash2, ChevronRight } from "lucide-react";
 import type { Estimate } from "@shared/schema";
 
@@ -38,11 +43,17 @@ export default function EstimatesListPage() {
   });
   const userMap = new Map(users?.map(u => [u.id, u.displayName]) ?? []);
 
+  const [deleteTarget, setDeleteTarget] = useState<Estimate | null>(null);
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest(`/api/estimates/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/estimates"] });
       toast({ title: "Estimate deleted" });
+      setDeleteTarget(null);
+    },
+    onError: (err: any) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -135,7 +146,7 @@ export default function EstimatesListPage() {
                   className="text-destructive opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm("Delete this estimate?")) deleteMutation.mutate(estimate.id);
+                    setDeleteTarget(estimate);
                   }}
                   data-testid={`delete-estimate-${estimate.id}`}
                 >
@@ -147,6 +158,28 @@ export default function EstimatesListPage() {
           ))
         )}
       </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this estimate?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget && `${deleteTarget.customerName} — ${deleteTarget.customerAddress}. `}
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,6 +12,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { UserPlus, Trash2, KeyRound, Users } from "lucide-react";
@@ -57,11 +61,14 @@ export default function UsersPage() {
   });
 
   // ── Delete user ─────────────────────────────────────────────────────────────
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest(`/api/users/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "User removed" });
+      setDeleteTarget(null);
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -130,7 +137,7 @@ export default function UsersPage() {
                     variant="ghost" size="sm"
                     className="h-8 w-8 p-0 text-destructive"
                     title="Remove user"
-                    onClick={() => { if (confirm(`Remove ${u.displayName}?`)) deleteMutation.mutate(u.id); }}
+                    onClick={() => setDeleteTarget(u)}
                     data-testid={`delete-user-${u.id}`}
                   >
                     <Trash2 size={14} />
@@ -212,6 +219,28 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete user confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={open => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {deleteTarget?.displayName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              They will no longer be able to log in. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
