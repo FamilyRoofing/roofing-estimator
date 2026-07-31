@@ -43,6 +43,12 @@ const DECKING_TYPES = ["Plywood","OSB"];
 // These compute the TOTAL cost for a given quantity, rounding up to whole units.
 function roundUp(x: number) { return Math.ceil(x); }
 
+// Round up to the nearest third of a square (whole, .33, or .67) — matches
+// how squares are measured/ordered on the roof (1 bundle = 1/3 SQ).
+function roundUpToThird(x: number) {
+  return Math.round((Math.ceil(x * 3) / 3) * 100) / 100;
+}
+
 // Hip & Ridge: 25 lf/bundle, bundle cost = 68*1.07+25
 const HR_BUNDLE_LF   = 25;
 const HR_BUNDLE_COST = 68 * 1.07 + 25;   // $97.76
@@ -179,7 +185,7 @@ export default function EstimatorPage() {
 
   const totalRawSq = sections.reduce((s, sec) => s + num(sec.squares), 0);
   const wasteMultiplier = 1 + num(wastePercent) / 100;
-  const totalWithWaste = parseFloat((totalRawSq * wasteMultiplier).toFixed(2));
+  const totalWithWaste = roundUpToThird(totalRawSq * wasteMultiplier);
 
   // Materials
   const [shingleType, setShingleType] = useState("Landmark");
