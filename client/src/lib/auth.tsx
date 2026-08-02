@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { extractErrorMessage } from "./utils";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
@@ -26,8 +27,7 @@ async function authFetch(url: string, options?: RequestInit): Promise<any> {
     ...options,
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || String(res.status));
+    throw new Error(await extractErrorMessage(res));
   }
   return res.json();
 }

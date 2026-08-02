@@ -1,11 +1,11 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { extractErrorMessage } from "./utils";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    throw new Error(await extractErrorMessage(res));
   }
 }
 
