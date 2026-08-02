@@ -1,4 +1,4 @@
-import { Switch, Route, Router } from "wouter";
+import { Switch, Route, Router, Redirect } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
@@ -8,7 +8,6 @@ import EstimatorPage from "./pages/EstimatorPage";
 import EstimatesListPage from "./pages/EstimatesListPage";
 import UsersPage from "./pages/UsersPage";
 import LoginPage from "./pages/LoginPage";
-import NotFound from "./pages/not-found";
 import { Button } from "@/components/ui/button";
 import { LogOut, Users } from "lucide-react";
 
@@ -73,7 +72,9 @@ function AuthenticatedApp() {
         <Route path="/new" component={EstimatorPage} />
         <Route path="/estimate/:id" component={EstimatorPage} />
         {user?.role === "admin" && <Route path="/users" component={UsersPage} />}
-        <Route component={NotFound} />
+        {/* Any unmatched or no-longer-permitted route (e.g. a stale /users
+            link on a non-admin's device) bounces home instead of a dead-end 404 */}
+        <Route><Redirect to="/" /></Route>
       </Switch>
     </div>
   );
