@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -164,7 +165,7 @@ export default function UsersPage() {
             </div>
             <div>
               <Label className="text-xs">Password</Label>
-              <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="••••••••" className="mt-1" data-testid="input-new-password" />
+              <PasswordInput value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="••••••••" className="mt-1" data-testid="input-new-password" />
             </div>
             <div>
               <Label className="text-xs">Role</Label>
@@ -198,8 +199,7 @@ export default function UsersPage() {
           <DialogHeader><DialogTitle>Reset Password — {resetTarget?.displayName}</DialogTitle></DialogHeader>
           <div className="py-2">
             <Label className="text-xs">New Password</Label>
-            <Input
-              type="password"
+            <PasswordInput
               value={newPwd}
               onChange={e => setNewPwd(e.target.value)}
               placeholder="New password"
