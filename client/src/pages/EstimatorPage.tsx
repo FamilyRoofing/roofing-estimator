@@ -50,6 +50,11 @@ function roundUpToThird(x: number) {
   return Math.round((Math.ceil(x * 3) / 3) * 100) / 100;
 }
 
+// Round up to the nearest 10 — synthetic underlayment sells in 10 SQ rolls.
+function roundUpToTen(x: number) {
+  return Math.ceil(x / 10) * 10;
+}
+
 // Hip & Ridge: 25 lf/bundle, bundle cost = 68*1.07+25
 const HR_BUNDLE_LF   = 25;
 const HR_BUNDLE_COST = 68 * 1.07 + 25;   // $97.76
@@ -236,9 +241,10 @@ export default function EstimatorPage() {
   const [flintlasticQty, setFlintlasticQty] = useState("");
   const FLINTLASTIC_PRICE = 301;
 
-  // Auto-fill underlayment with total sq + waste
+  // Auto-fill underlayment with total sq + waste, rounded up to the nearest
+  // 10 SQ since synthetic underlayment sells in 10 SQ rolls.
   useEffect(() => {
-    if (totalWithWaste > 0) setUnderlaymentQty(String(totalWithWaste));
+    if (totalWithWaste > 0) setUnderlaymentQty(String(roundUpToTen(totalWithWaste)));
   }, [totalWithWaste]);
 
   // Auto-fill shingle qty with total sq + waste (only if not yet set)
