@@ -306,7 +306,9 @@ export default function EstimatorPage() {
   const hipRidgeBundles = roundUp(num(ridgeCapQty) / HR_BUNDLE_LF);
   const accessorySq     = (starterBundles + hipRidgeBundles) / 3;
   const totalSqForPrice = totalWithWaste + accessorySq;
-  const pricePerSq = totalSqForPrice > 0 ? grandTotal / totalSqForPrice : 0;
+  // Skylights are a one-off add-on, not part of the roof itself — exclude
+  // their (marked-up) price from the per-square figure.
+  const pricePerSq = totalSqForPrice > 0 ? (grandTotal - salesPrice(skylightsTotal)) / totalSqForPrice : 0;
 
   // Proportional sales price: distributes markup + commission across raw cost
   // salesPrice(x) = (x / A) * grandTotal — all line prices sum to grandTotal
