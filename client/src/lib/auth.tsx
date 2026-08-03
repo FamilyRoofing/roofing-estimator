@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { extractErrorMessage } from "./utils";
+import { queryClient } from "./queryClient";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
@@ -50,11 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+    // Discard any cached data from a previous session on this device —
+    // staleTime: Infinity means a stale user's queries would otherwise
+    // keep rendering until each one happens to be manually invalidated.
+    queryClient.clear();
     setUser(u);
   }
 
   async function logout() {
     await authFetch("/api/auth/logout", { method: "POST" });
+    queryClient.clear();
     setUser(null);
   }
 
