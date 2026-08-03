@@ -24,7 +24,7 @@ import { ALL_VELUX_MODELS, SKYLIGHT_INSTALL_COST, SKYLIGHT_FLASHING_COST } from 
 
 const DEFAULT_MARKUP_RATE = 0.40;
 const COMMISSION_OFFICE = 0.10;
-const COMMISSION_SELF   = 0.12;
+const COMMISSION_SELF   = 0.14;
 const MISC_AMOUNT       = 220; // $200 overhead + $20 EagleView — always hidden
 
 const PITCHES = ["3/12","4/12","5/12","6/12","7/12","8/12","9/12","10/12","11/12","12/12","13/12","14/12"];
@@ -760,7 +760,7 @@ export default function EstimatorPage() {
                           : "bg-background border-border text-foreground hover:bg-muted"
                       }`}
                     >
-                      Self-Generated<br /><span className="text-xs font-normal opacity-80">12% commission</span>
+                      Self-Generated<br /><span className="text-xs font-normal opacity-80">14% commission</span>
                     </button>
                   </div>
                 </div>
@@ -816,7 +816,7 @@ export default function EstimatorPage() {
                   <div>
                     <div className="text-sm font-semibold text-foreground">Your Commission</div>
                     <div className="text-xs text-muted-foreground">
-                      {leadType === "office" ? "10% — Office Lead" : "12% — Self-Generated"}
+                      {leadType === "office" ? "10% — Office Lead" : "14% — Self-Generated"}
                       {(dripEdgeTotal > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
                     </div>
                   </div>
@@ -1101,7 +1101,7 @@ export default function EstimatorPage() {
                   </button>
                   <button type="button" onClick={() => setLeadType("self")}
                     className={`rounded-md py-1.5 px-3 text-sm font-medium border transition-colors ${leadType === "self" ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-foreground hover:bg-muted"}`}>
-                    Self-Generated (12%)
+                    Self-Generated (14%)
                   </button>
                 </div>
               </div>
@@ -1113,7 +1113,7 @@ export default function EstimatorPage() {
                 <Separator />
                 <div className="flex justify-between text-lg font-bold"><span>Total Price</span><span className="text-primary">{fmtBig(grandTotal)}</span></div>
                 <div className="flex justify-between text-green-700 dark:text-green-400">
-                  <span>F — Commission ({leadType === "office" ? "10%" : "12%"} of Total)</span>
+                  <span>F — Commission ({leadType === "office" ? "10%" : "14%"} of Total)</span>
                   <span className="font-semibold">{fmtBig(F)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
