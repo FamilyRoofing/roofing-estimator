@@ -784,15 +784,15 @@ export default function EstimatorPage() {
                         <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
                       </div>
                     )}
-                    {skylights.map(sk => (
-                      <div key={sk.id} className="flex items-center justify-between">
+                    {skylights.length > 0 && (
+                      <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-sm font-semibold text-foreground">Skylight — {sk.model}</div>
-                          <div className="text-xs text-muted-foreground">{sk.qty} EA — {sk.size} · commission {fmtBig(itemCommission(sk.lineTotal))}</div>
+                          <div className="text-sm font-semibold text-foreground">Skylights</div>
+                          <div className="text-xs text-muted-foreground">{skylights.reduce((s, sk) => s + sk.qty, 0)} EA total · commission {fmtBig(itemCommission(skylightsTotal))}</div>
                         </div>
-                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(sk.lineTotal))}</span>
+                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(skylightsTotal))}</span>
                       </div>
-                    ))}
+                    )}
                     <Separator />
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold text-foreground">Add-Ons Subtotal</span>
@@ -1133,12 +1133,12 @@ export default function EstimatorPage() {
                         <span>{fmtBig(salesPrice(dripEdgeTotal))} (commission {fmtBig(itemCommission(dripEdgeTotal))})</span>
                       </div>
                     )}
-                    {skylights.map(sk => (
-                      <div key={sk.id} className="flex justify-between text-xs text-muted-foreground pl-3">
-                        <span>— Skylight ({sk.model})</span>
-                        <span>{fmtBig(salesPrice(sk.lineTotal))} (commission {fmtBig(itemCommission(sk.lineTotal))})</span>
+                    {skylights.length > 0 && (
+                      <div className="flex justify-between text-xs text-muted-foreground pl-3">
+                        <span>— Skylights ({skylights.reduce((s, sk) => s + sk.qty, 0)} EA)</span>
+                        <span>{fmtBig(salesPrice(skylightsTotal))} (commission {fmtBig(itemCommission(skylightsTotal))})</span>
                       </div>
-                    ))}
+                    )}
                     <div className="flex justify-between text-green-700 dark:text-green-400"><span className="text-xs">Add-Ons — Commission</span><span className="font-semibold">{fmtBig(addOnsCommission)}</span></div>
                   </div>
                 </>
