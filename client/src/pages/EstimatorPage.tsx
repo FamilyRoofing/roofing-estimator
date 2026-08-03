@@ -308,6 +308,22 @@ export default function EstimatorPage() {
     if (!A || A <= 0) return 0;
     return (rawCost / A) * grandTotal;
   }
+  // Commission earned specifically on a given raw cost, at the same rate as everything else
+  function itemCommission(rawCost: number): number {
+    return salesPrice(rawCost) * commissionRate;
+  }
+
+  // ─── Optional Add-Ons breakout (Drip Edge + Skylights) ───────────────────
+  // Same markup % and commission % as the base roof — just split into two
+  // buckets instead of one, so baseTotal + addOnsTotal === grandTotal exactly.
+  const addOnsRaw = dripEdgeTotal + skylightsTotal;
+  const baseRaw = A - addOnsRaw;
+  const baseSubtotal = baseRaw * (1 + markupRate);
+  const baseTotal = baseSubtotal / (1 - commissionRate);
+  const baseCommission = baseTotal * commissionRate;
+  const addOnsSubtotal = addOnsRaw * (1 + markupRate);
+  const addOnsTotal = addOnsSubtotal / (1 - commissionRate);
+  const addOnsCommission = addOnsTotal * commissionRate;
 
   const isAdmin = role === "admin" && canSeeAdminView;
 
@@ -749,25 +765,45 @@ export default function EstimatorPage() {
                   </div>
                 </div>
 
-                {/* Drip Edge & Skylight line prices */}
-                {dripEdgeTotal > 0 && (
-                  <div className="flex items-center justify-between px-4 py-2 border border-border rounded-lg">
-                    <div>
-                      <div className="text-sm font-semibold text-foreground">Drip Edge</div>
-                      <div className="text-xs text-muted-foreground">{num(dripEdgeQty)} FT — {dripEdgeColor}</div>
+                {/* Base Roof subtotal */}
+                <div className="flex items-center justify-between px-4 py-2 border border-border rounded-lg">
+                  <span className="text-sm font-semibold text-foreground">Base Roof Subtotal</span>
+                  <span className="text-lg font-bold text-foreground">{fmtBig(baseTotal)}</span>
+                </div>
+
+                {/* Optional Add-Ons — Drip Edge & Skylights, same markup/commission rates as the base roof */}
+                {(dripEdgeTotal > 0 || skylights.length > 0) && (
+                  <div className="border border-primary/30 rounded-lg p-3 space-y-2">
+                    <div className="text-xs font-bold text-primary uppercase tracking-wide">Optional Add-Ons</div>
+                    {dripEdgeTotal > 0 && (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">Drip Edge</div>
+                          <div className="text-xs text-muted-foreground">{num(dripEdgeQty)} FT — {dripEdgeColor} · commission {fmtBig(itemCommission(dripEdgeTotal))}</div>
+                        </div>
+                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
+                      </div>
+                    )}
+                    {skylights.map(sk => (
+                      <div key={sk.id} className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">Skylight — {sk.model}</div>
+                          <div className="text-xs text-muted-foreground">{sk.qty} EA — {sk.size} · commission {fmtBig(itemCommission(sk.lineTotal))}</div>
+                        </div>
+                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(sk.lineTotal))}</span>
+                      </div>
+                    ))}
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-foreground">Add-Ons Subtotal</span>
+                      <span className="text-base font-bold text-foreground">{fmtBig(addOnsTotal)}</span>
                     </div>
-                    <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
+                    <div className="flex items-center justify-between text-green-700 dark:text-green-400">
+                      <span className="text-xs font-medium">Commission on Add-Ons</span>
+                      <span className="text-sm font-semibold">{fmtBig(addOnsCommission)}</span>
+                    </div>
                   </div>
                 )}
-                {skylights.map(sk => (
-                  <div key={sk.id} className="flex items-center justify-between px-4 py-2 border border-border rounded-lg">
-                    <div>
-                      <div className="text-sm font-semibold text-foreground">Skylight — {sk.model}</div>
-                      <div className="text-xs text-muted-foreground">{sk.qty} EA — {sk.size}</div>
-                    </div>
-                    <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(sk.lineTotal))}</span>
-                  </div>
-                ))}
 
                 {/* Total Price */}
                 <div className="flex items-center justify-between py-3 bg-primary/5 rounded-lg px-4">
@@ -781,6 +817,7 @@ export default function EstimatorPage() {
                     <div className="text-sm font-semibold text-foreground">Your Commission</div>
                     <div className="text-xs text-muted-foreground">
                       {leadType === "office" ? "10% — Office Lead" : "12% — Self-Generated"}
+                      {(dripEdgeTotal > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
                     </div>
                   </div>
                   <span className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="sales-commission">{fmtBig(F)}</span>
@@ -1081,6 +1118,31 @@ export default function EstimatorPage() {
                 </div>
                 <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
               </div>
+
+              {(dripEdgeTotal > 0 || skylights.length > 0) && (
+                <>
+                  <Separator className="my-3" />
+                  <div className="text-xs font-bold text-primary uppercase tracking-wide mb-2">Base Roof vs. Optional Add-Ons</div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Base Roof — Total Price</span><span className="font-semibold">{fmtBig(baseTotal)}</span></div>
+                    <div className="flex justify-between text-green-700 dark:text-green-400"><span className="text-xs">Base Roof — Commission</span><span className="font-semibold">{fmtBig(baseCommission)}</span></div>
+                    <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Add-Ons (Drip Edge + Skylights) — Total Price</span><span className="font-semibold">{fmtBig(addOnsTotal)}</span></div>
+                    {dripEdgeTotal > 0 && (
+                      <div className="flex justify-between text-xs text-muted-foreground pl-3">
+                        <span>— Drip Edge</span>
+                        <span>{fmtBig(salesPrice(dripEdgeTotal))} (commission {fmtBig(itemCommission(dripEdgeTotal))})</span>
+                      </div>
+                    )}
+                    {skylights.map(sk => (
+                      <div key={sk.id} className="flex justify-between text-xs text-muted-foreground pl-3">
+                        <span>— Skylight ({sk.model})</span>
+                        <span>{fmtBig(salesPrice(sk.lineTotal))} (commission {fmtBig(itemCommission(sk.lineTotal))})</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-green-700 dark:text-green-400"><span className="text-xs">Add-Ons — Commission</span><span className="font-semibold">{fmtBig(addOnsCommission)}</span></div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="section-card">
