@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -149,7 +150,9 @@ export default function EstimatorPage() {
   const { toast } = useToast();
   const isNew = !params.id;
 
-  const [role, setRole] = useState<"admin" | "sales">("admin");
+  const { user } = useAuth();
+  const canSeeAdminView = user?.role === "admin";
+  const [role, setRole] = useState<"admin" | "sales">(canSeeAdminView ? "admin" : "sales");
 
   // Lead type for commission calculation
   const [leadType, setLeadType] = useState<"office" | "self">("office");
@@ -306,7 +309,7 @@ export default function EstimatorPage() {
     return (rawCost / A) * grandTotal;
   }
 
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" && canSeeAdminView;
 
   // ─── Section helpers ──────────────────────────────────────────────────────
   const addSection = () => { if (sections.length < 3) setSections([...sections, { squares: "", pitch: "6/12" }]); };
@@ -475,9 +478,11 @@ export default function EstimatorPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {canSeeAdminView && (
             <Button variant="outline" size="sm" onClick={() => setRole(r => r === "admin" ? "sales" : "admin")} className="gap-1 text-xs" data-testid="toggle-role">
               {isAdmin ? <><EyeOff size={14} /> Admin</> : <><Eye size={14} /> Sales</>}
             </Button>
+            )}
             <Button size="sm" onClick={() => saveMutation.mutate(buildPayload())} disabled={saveMutation.isPending} className="gap-1" data-testid="save-estimate">
               <Save size={14} /> {saveMutation.isPending ? "Saving..." : "Save"}
             </Button>
