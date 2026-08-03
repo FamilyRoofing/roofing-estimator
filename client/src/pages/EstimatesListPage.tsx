@@ -128,17 +128,21 @@ export default function EstimatesListPage() {
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {fmtDate(estimate.createdAt)} · {estimate.totalSquaresWithWaste?.toFixed(1) ?? "—"} SQ
                     {estimate.shingleType && ` · ${estimate.shingleType}`}
-                    {/* Admin: show which salesperson owns this estimate */}
-                    {user?.role === "admin" && estimate.userId && userMap.get(estimate.userId) && (
-                      <span className="ml-1.5 text-primary/70">· {userMap.get(estimate.userId)}</span>
-                    )}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-right">
                   <div className="text-base font-bold text-primary">{fmtBig(estimate.totalWithMisc)}</div>
-                  <Badge variant="secondary" className="text-xs mt-0.5">{estimate.status ?? "draft"}</Badge>
+                  <div className="flex items-center gap-1.5 justify-end mt-0.5">
+                    {/* Admin: always show which salesperson owns this estimate */}
+                    {user?.role === "admin" && (
+                      <Badge variant="outline" className="text-xs" data-testid={`estimate-owner-${estimate.id}`}>
+                        {estimate.userId ? (userMap.get(estimate.userId) ?? `User #${estimate.userId}`) : "Unassigned"}
+                      </Badge>
+                    )}
+                    <Badge variant="secondary" className="text-xs">{estimate.status ?? "draft"}</Badge>
+                  </div>
                 </div>
                 <Button
                   variant="ghost"
