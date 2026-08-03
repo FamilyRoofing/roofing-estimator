@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ChevronLeft, Save, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, Save, Eye, EyeOff, Plus, Trash2, Printer } from "lucide-react";
 import type { Estimate, SkylightItem } from "@shared/schema";
 import { ALL_VELUX_MODELS, SKYLIGHT_INSTALL_COST, SKYLIGHT_FLASHING_COST } from "@/lib/velux";
 
@@ -466,7 +466,7 @@ export default function EstimatorPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-card border-b border-border shadow-sm">
+      <div className="sticky top-0 z-10 bg-card border-b border-border shadow-sm print:hidden">
         <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => setLocation("/")} className="gap-1">
@@ -483,6 +483,9 @@ export default function EstimatorPage() {
               {isAdmin ? <><EyeOff size={14} /> Admin</> : <><Eye size={14} /> Sales</>}
             </Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1" data-testid="print-estimate">
+              <Printer size={14} /> Print
+            </Button>
             <Button size="sm" onClick={() => saveMutation.mutate(buildPayload())} disabled={saveMutation.isPending} className="gap-1" data-testid="save-estimate">
               <Save size={14} /> {saveMutation.isPending ? "Saving..." : "Save"}
             </Button>
@@ -520,7 +523,7 @@ export default function EstimatorPage() {
               <div className="section-header flex items-center justify-between">
                 <span>Roof Measurements</span>
                 {sections.length < 3 && (
-                  <Button variant="outline" size="sm" onClick={addSection} className="gap-1 text-xs h-7"><Plus size={12} /> Add Section</Button>
+                  <Button variant="outline" size="sm" onClick={addSection} className="gap-1 text-xs h-7 print:hidden"><Plus size={12} /> Add Section</Button>
                 )}
               </div>
               <div className="grid grid-cols-12 gap-2 mb-1 text-xs font-semibold text-muted-foreground">
@@ -543,7 +546,7 @@ export default function EstimatorPage() {
                   </div>
                   <div className="col-span-1 flex justify-center">
                     {sections.length > 1 && (
-                      <Button variant="ghost" size="sm" onClick={() => removeSection(i)} className="h-7 w-7 p-0 text-destructive"><Trash2 size={13} /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => removeSection(i)} className="h-7 w-7 p-0 text-destructive print:hidden"><Trash2 size={13} /></Button>
                     )}
                   </div>
                 </div>
@@ -624,7 +627,7 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <div className="flex items-center justify-between mb-2">
                 <SalesGroupLabel noMargin>Velux Skylights</SalesGroupLabel>
-                <Button variant="outline" size="sm" onClick={addSkylight} className="gap-1 text-xs h-7">
+                <Button variant="outline" size="sm" onClick={addSkylight} className="gap-1 text-xs h-7 print:hidden">
                   <Plus size={12} /> Add Skylight
                 </Button>
               </div>
@@ -654,7 +657,7 @@ export default function EstimatorPage() {
                     </div>
                     <div className="col-span-1 text-xs text-center text-muted-foreground">EA</div>
                     <div className="col-span-1 flex justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => removeSkylight(sk.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 size={13} /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => removeSkylight(sk.id)} className="h-7 w-7 p-0 text-destructive print:hidden"><Trash2 size={13} /></Button>
                     </div>
                   </div>
                 </div>
@@ -834,7 +837,7 @@ export default function EstimatorPage() {
               <div className="section-header flex items-center justify-between">
                 <span>Roof Measurements</span>
                 {sections.length < 3 && (
-                  <Button variant="outline" size="sm" onClick={addSection} className="gap-1 text-xs h-7" data-testid="add-section"><Plus size={12} /> Add Section</Button>
+                  <Button variant="outline" size="sm" onClick={addSection} className="gap-1 text-xs h-7 print:hidden" data-testid="add-section"><Plus size={12} /> Add Section</Button>
                 )}
               </div>
               <div className="grid grid-cols-12 gap-2 mb-1 text-xs font-semibold text-muted-foreground">
@@ -851,7 +854,7 @@ export default function EstimatorPage() {
                     </Select>
                   </div>
                   <div className="col-span-1 flex justify-center">
-                    {sections.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeSection(i)} className="h-7 w-7 p-0 text-destructive"><Trash2 size={13} /></Button>}
+                    {sections.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeSection(i)} className="h-7 w-7 p-0 text-destructive print:hidden"><Trash2 size={13} /></Button>}
                   </div>
                 </div>
               ))}
@@ -929,7 +932,7 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <div className="flex items-center justify-between mb-2">
                 <GroupLabel noMargin>Velux Skylights</GroupLabel>
-                <Button variant="outline" size="sm" onClick={addSkylight} className="gap-1 text-xs h-7">
+                <Button variant="outline" size="sm" onClick={addSkylight} className="gap-1 text-xs h-7 print:hidden">
                   <Plus size={12} /> Add Skylight
                 </Button>
               </div>
@@ -959,7 +962,7 @@ export default function EstimatorPage() {
                     </div>
                     <div className="col-span-1 text-xs text-center text-muted-foreground">EA</div>
                     <div className="col-span-2 flex justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => removeSkylight(sk.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 size={13} /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => removeSkylight(sk.id)} className="h-7 w-7 p-0 text-destructive print:hidden"><Trash2 size={13} /></Button>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground bg-background rounded px-2 py-1.5">

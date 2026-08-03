@@ -112,3 +112,21 @@ input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+@media print {
+  body, .section-card {
+    background: white !important;
+    color: black !important;
+  }
+  input, textarea, button[role="combobox"] {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: black !important;
+    padding-left: 0 !important;
+  }
+  .section-card {
+    border: 1px solid #ccc !important;
+    break-inside: avoid;
+  }
+}
