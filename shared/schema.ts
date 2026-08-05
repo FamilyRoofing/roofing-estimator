@@ -35,6 +35,10 @@ export const estimates = sqliteTable("estimates", {
   wastePercent: real("waste_percent").default(15),
   totalSquares: real("total_squares"),
   totalSquaresWithWaste: real("total_squares_with_waste"),
+  // Layers to Remove (tear-off surcharge: $30/SQ per layer above 1)
+  layersToRemove: real("layers_to_remove").default(1),
+  layersQty: real("layers_qty"),
+  layersPricePerUnit: real("layers_price_per_unit"),
   // Shingle
   shingleType: text("shingle_type"),
   shingleColor: text("shingle_color"),
@@ -69,6 +73,15 @@ export const estimates = sqliteTable("estimates", {
   // Bay Windows / Dormers
   bayWindowsQty: real("bay_windows_qty"),
   bayWindowsPricePerUnit: real("bay_windows_price_per_unit"),
+  // Stationary Vents (750/Turtle Vents)
+  stationaryVentsQty: real("stationary_vents_qty"),
+  stationaryVentsPricePerUnit: real("stationary_vents_price_per_unit"),
+  // Power Vents
+  powerVentsQty: real("power_vents_qty"),
+  powerVentsPricePerUnit: real("power_vents_price_per_unit"),
+  // Solar Vents
+  solarVentsQty: real("solar_vents_qty"),
+  solarVentsPricePerUnit: real("solar_vents_price_per_unit"),
   // Skylights — stored as JSON array of skylight line items
   skylightsJson: text("skylights_json"),
   // Ventilation

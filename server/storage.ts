@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { estimates, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { InsertEstimate, Estimate, User } from "@shared/schema";
@@ -95,15 +96,52 @@ const _addCol = (col: string, type: string) => {
 _addCol("user_id", "INTEGER");
 _addCol("referral_fee", "REAL");
 _addCol("referral_name", "TEXT");
+_addCol("layers_to_remove", "REAL DEFAULT 1");
+_addCol("layers_qty", "REAL");
+_addCol("layers_price_per_unit", "REAL");
+_addCol("stationary_vents_qty", "REAL");
+_addCol("stationary_vents_price_per_unit", "REAL");
+_addCol("power_vents_qty", "REAL");
+_addCol("power_vents_price_per_unit", "REAL");
+_addCol("solar_vents_qty", "REAL");
+_addCol("solar_vents_price_per_unit", "REAL");
 
-// ─── Seed default admin account (username: admin / password: admin123) ────────
-const existing = sqlite.prepare("SELECT id FROM users WHERE username = 'admin'").get();
-if (!existing) {
-  const hash = bcrypt.hashSync("admin123", 10);
+// ─── Seed / secure default admin account ───────────────────────────────────────
+// Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a
+// random password on first boot and logs it once. Also detects installations
+// still running the old hardcoded "admin123" password and auto-rotates it.
+function generateRandomPassword(): string {
+  return crypto.randomBytes(18).toString("base64url");
+}
+
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
+const existingAdmin = sqlite
+  .prepare("SELECT id, password_hash FROM users WHERE username = ?")
+  .get(ADMIN_USERNAME) as { id: number; password_hash: string } | undefined;
+
+if (!existingAdmin) {
+  const password = process.env.ADMIN_PASSWORD || generateRandomPassword();
+  const hash = bcrypt.hashSync(password, 10);
   sqlite.prepare(
     "INSERT INTO users (username, password_hash, role, display_name, created_at) VALUES (?, ?, 'admin', 'Administrator', ?)"
-  ).run("admin", hash, new Date().toISOString());
-  console.log("[storage] Seeded default admin: username=admin password=admin123");
+  ).run(ADMIN_USERNAME, hash, new Date().toISOString());
+  if (process.env.ADMIN_PASSWORD) {
+    console.log(`[storage] Seeded admin account: username=${ADMIN_USERNAME} (password set from ADMIN_PASSWORD)`);
+  } else {
+    console.log(`[storage] Seeded admin account: username=${ADMIN_USERNAME} password=${password}`);
+    console.log("[storage] Save this password now — it will not be shown again. Set ADMIN_PASSWORD to control it explicitly.");
+  }
+} else if (bcrypt.compareSync("admin123", existingAdmin.password_hash)) {
+  // Existing install still has the old hardcoded password — rotate it now.
+  const password = process.env.ADMIN_PASSWORD || generateRandomPassword();
+  const hash = bcrypt.hashSync(password, 10);
+  sqlite.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, existingAdmin.id);
+  if (process.env.ADMIN_PASSWORD) {
+    console.log(`[storage] SECURITY: admin account had the default password — rotated to ADMIN_PASSWORD value.`);
+  } else {
+    console.log(`[storage] SECURITY: admin account had the default password — rotated. New password=${password}`);
+    console.log("[storage] Save this password now — it will not be shown again. Set ADMIN_PASSWORD to control it explicitly.");
+  }
 }
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────

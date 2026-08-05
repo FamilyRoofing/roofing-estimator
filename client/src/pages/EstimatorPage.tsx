@@ -190,6 +190,7 @@ export default function EstimatorPage() {
   // Roof sections
   const [sections, setSections] = useState([{ squares: "", pitch: "6/12" }]);
   const [wastePercent, setWastePercent] = useState("15");
+  const [layersToRemove, setLayersToRemove] = useState("1");
 
   const totalRawSq = sections.reduce((s, sec) => s + num(sec.squares), 0);
   const wasteMultiplier = 1 + num(wastePercent) / 100;
@@ -223,6 +224,15 @@ export default function EstimatorPage() {
 
   const [bayWindowsQty, setBayWindowsQty] = useState("");
   const [bayWindowsPrice, setBayWindowsPrice] = useState(String(D.bayWindow));
+
+  const [stationaryVentsQty, setStationaryVentsQty] = useState("");
+  const [stationaryVentsPrice, setStationaryVentsPrice] = useState("24");
+
+  const [powerVentsQty, setPowerVentsQty] = useState("");
+  const [powerVentsPrice, setPowerVentsPrice] = useState("200");
+
+  const [solarVentsQty, setSolarVentsQty] = useState("");
+  const [solarVentsPrice, setSolarVentsPrice] = useState("650");
 
   // Skylights — dynamic array
   const [skylights, setSkylights] = useState<SkylightItem[]>([]);
@@ -278,10 +288,18 @@ export default function EstimatorPage() {
   const trimCoilTotal     = num(trimCoilQty) * num(trimCoilPrice);
   const pipeBootsTotal    = num(pipeBootsQty) * num(pipeBootsPrice);
   const bayWindowsTotal   = num(bayWindowsQty) * num(bayWindowsPrice);
+  const stationaryVentsTotal = num(stationaryVentsQty) * num(stationaryVentsPrice);
+  const powerVentsTotal   = num(powerVentsQty) * num(powerVentsPrice);
+  const solarVentsTotal   = num(solarVentsQty) * num(solarVentsPrice);
   const skylightsTotal    = skylights.reduce((s, sk) => s + sk.lineTotal, 0);
   const ridgeVentTotal    = ridgeVentTotal2(num(ridgeVentQty));
   const deckingTotal      = num(deckingQty) * num(deckingPrice);
   const flintlasticTotal  = roundUp(num(flintlasticQty)) * FLINTLASTIC_PRICE;
+
+  // Layers to Remove — tear-off surcharge: $30/SQ for each layer above the first,
+  // applied across the total SQ with waste (all roof sections combined).
+  const layersRate  = 30 * Math.max(0, num(layersToRemove) - 1);
+  const layersTotal = totalWithWaste * layersRate;
 
   // Effective per-unit display rates (for admin view $/Unit column)
   const qUL = num(underlaymentQty);  const rateUL = qUL > 0 ? underlayTotal / qUL : UL_ROLL_COST / UL_ROLL_SQ;
@@ -294,8 +312,8 @@ export default function EstimatorPage() {
   // ─── Markup model ─────────────────────────────────────────────────────────
   const A = shingleTotal + landmarkProTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
     ridgeCapTotal + iceWaterTotal + dripEdgeTotal + stepFlashTotal +
-    trimCoilTotal + pipeBootsTotal + bayWindowsTotal + skylightsTotal +
-    ridgeVentTotal + deckingTotal + flintlasticTotal + referralFee + MISC_AMOUNT;
+    trimCoilTotal + pipeBootsTotal + bayWindowsTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
+    ridgeVentTotal + deckingTotal + flintlasticTotal + layersTotal + referralFee + MISC_AMOUNT;
   const B = A * markupRate;
   const E = A + B;
   // Commission is X% of Total Price: Total = E / (1 - rate), F = Total * rate
@@ -380,6 +398,7 @@ export default function EstimatorPage() {
     setCustomerEmail(existingEstimate.customerEmail || "");
     setNotes(existingEstimate.notes || "");
     setWastePercent(String(existingEstimate.wastePercent ?? 15));
+    setLayersToRemove(String(existingEstimate.layersToRemove ?? 1));
     setShingleType(existingEstimate.shingleType || "Landmark");
     setShingleColor(existingEstimate.shingleColor || "");
     setShingleQty(String(existingEstimate.shingleQty ?? ""));
@@ -398,6 +417,12 @@ export default function EstimatorPage() {
     setPipeBootsPrice(String(existingEstimate.pipeBootsPricePerUnit ?? D.pipeBoot));
     setBayWindowsQty(String(existingEstimate.bayWindowsQty ?? ""));
     setBayWindowsPrice(String(existingEstimate.bayWindowsPricePerUnit ?? D.bayWindow));
+    setStationaryVentsQty(String(existingEstimate.stationaryVentsQty ?? ""));
+    setStationaryVentsPrice(String(existingEstimate.stationaryVentsPricePerUnit ?? 24));
+    setPowerVentsQty(String(existingEstimate.powerVentsQty ?? ""));
+    setPowerVentsPrice(String(existingEstimate.powerVentsPricePerUnit ?? 200));
+    setSolarVentsQty(String(existingEstimate.solarVentsQty ?? ""));
+    setSolarVentsPrice(String(existingEstimate.solarVentsPricePerUnit ?? 650));
     setRidgeVentQty(String(existingEstimate.ventilationQty ?? ""));
     setDeckingQty(String(existingEstimate.deckingQty ?? ""));
     setDeckingPrice(String(existingEstimate.deckingPricePerUnit ?? D.decking));
@@ -433,6 +458,9 @@ export default function EstimatorPage() {
     wastePercent: num(wastePercent),
     totalSquares: totalRawSq,
     totalSquaresWithWaste: totalWithWaste,
+    layersToRemove: num(layersToRemove) || 1,
+    layersQty: totalWithWaste || null,
+    layersPricePerUnit: layersRate,
     shingleType, shingleColor: shingleColor || null,
     shingleQty: num(shingleQty) || null,
     shinglePricePerSq: num(shinglePrice),
@@ -456,6 +484,12 @@ export default function EstimatorPage() {
     pipeBootsPricePerUnit: num(pipeBootsPrice),
     bayWindowsQty: num(bayWindowsQty) || null,
     bayWindowsPricePerUnit: num(bayWindowsPrice),
+    stationaryVentsQty: num(stationaryVentsQty) || null,
+    stationaryVentsPricePerUnit: num(stationaryVentsPrice),
+    powerVentsQty: num(powerVentsQty) || null,
+    powerVentsPricePerUnit: num(powerVentsPrice),
+    solarVentsQty: num(solarVentsQty) || null,
+    solarVentsPricePerUnit: num(solarVentsPrice),
     skylightsJson: skylights.length ? JSON.stringify(skylights) : null,
     ventilationQty: num(ridgeVentQty) || null,
     ventilationPricePerUnit: rateRV,
@@ -577,9 +611,15 @@ export default function EstimatorPage() {
               ))}
               <Separator className="my-3" />
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs whitespace-nowrap">Waste %</Label>
-                  <Input type="number" min="0" max="50" value={wastePercent} onChange={e => setWastePercent(e.target.value)} className="text-sm w-16" />
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs whitespace-nowrap">Waste %</Label>
+                    <Input type="number" min="0" max="50" value={wastePercent} onChange={e => setWastePercent(e.target.value)} className="text-sm w-16" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs whitespace-nowrap">Layers to Remove</Label>
+                    <Input type="number" min="1" step="1" value={layersToRemove} onChange={e => setLayersToRemove(e.target.value)} className="text-sm w-16" />
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between"><span className="text-muted-foreground">Raw SQ:</span><span className="font-semibold">{totalRawSq.toFixed(2)}</span></div>
@@ -647,6 +687,13 @@ export default function EstimatorPage() {
               <SalesQtyRow label="Pipe Boots" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" />
               <SalesQtyRow label="Bay Windows / Dormers" qty={bayWindowsQty} setQty={setBayWindowsQty} unit="EA" />
 
+              <Separator className="my-2" />
+              <SalesGroupLabel>Ventilation</SalesGroupLabel>
+              <SalesQtyRow label="Ridge Vent" qty={ridgeVentQty} setQty={setRidgeVentQty} unit="LF" />
+              <SalesQtyRow label="750 Vents" qty={stationaryVentsQty} setQty={setStationaryVentsQty} unit="EA" />
+              <SalesQtyRow label="Power Vents" qty={powerVentsQty} setQty={setPowerVentsQty} unit="EA" />
+              <SalesQtyRow label="Solar Vents" qty={solarVentsQty} setQty={setSolarVentsQty} unit="EA" />
+
               {/* Skylights */}
               <Separator className="my-2" />
               <div className="flex items-center justify-between mb-2">
@@ -690,7 +737,6 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <SalesGroupLabel>Other</SalesGroupLabel>
               <SalesQtyRow label="Flintlastic" qty={flintlasticQty} setQty={setFlintlasticQty} unit="SQ" />
-              <SalesQtyRow label="Ridge Vent" qty={ridgeVentQty} setQty={setRidgeVentQty} unit="LF" />
               {/* Decking: thickness + type selectors */}
               <div className="grid grid-cols-12 gap-2 items-center mb-1">
                 <div className="col-span-7 text-sm font-medium flex items-center gap-1 flex-wrap">
@@ -905,9 +951,15 @@ export default function EstimatorPage() {
               ))}
               <Separator className="my-3" />
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs whitespace-nowrap">Waste %</Label>
-                  <Input type="number" min="0" max="50" value={wastePercent} onChange={e => setWastePercent(e.target.value)} className="text-sm w-16" />
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs whitespace-nowrap">Waste %</Label>
+                    <Input type="number" min="0" max="50" value={wastePercent} onChange={e => setWastePercent(e.target.value)} className="text-sm w-16" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs whitespace-nowrap">Layers to Remove</Label>
+                    <Input type="number" min="1" step="1" value={layersToRemove} onChange={e => setLayersToRemove(e.target.value)} className="text-sm w-16" />
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between"><span className="text-muted-foreground">Raw SQ:</span><span className="font-semibold">{totalRawSq.toFixed(2)}</span></div>
@@ -942,6 +994,9 @@ export default function EstimatorPage() {
               {steepPitchAdderTotal > 0 && (
                 <ARow label={`Steep Pitch (+$${totalSteepAdderPerSq.toFixed(0)}/SQ)`} qty={shingleQty} setQty={() => {}} unit="SQ" price={totalSteepAdderPerSq.toFixed(2)} setPrice={() => {}} total={steepPitchAdderTotal} readonlyQty readonlyPrice highlight />
               )}
+              {layersTotal > 0 && (
+                <ARow label={`Layers to Remove (${layersToRemove}) +$${layersRate.toFixed(0)}/SQ`} qty={String(totalWithWaste)} setQty={() => {}} unit="SQ" price={layersRate.toFixed(2)} setPrice={() => {}} total={layersTotal} readonlyQty readonlyPrice highlight />
+              )}
 
               <Separator className="my-2" />
               <GroupLabel>Underlayment & Accessories</GroupLabel>
@@ -972,6 +1027,13 @@ export default function EstimatorPage() {
               <GroupLabel>Openings & Penetrations</GroupLabel>
               <ARow label="Pipe Boots" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" price={pipeBootsPrice} setPrice={setPipeBootsPrice} total={pipeBootsTotal} />
               <ARow label="Bay Windows / Dormers" qty={bayWindowsQty} setQty={setBayWindowsQty} unit="EA" price={bayWindowsPrice} setPrice={setBayWindowsPrice} total={bayWindowsTotal} />
+
+              <Separator className="my-2" />
+              <GroupLabel>Ventilation</GroupLabel>
+              <ARow label="Ridge Vent" qty={ridgeVentQty} setQty={setRidgeVentQty} unit="LF" price={rateRV.toFixed(4)} setPrice={() => {}} total={ridgeVentTotal} readonlyPrice />
+              <ARow label="750 Vents" qty={stationaryVentsQty} setQty={setStationaryVentsQty} unit="EA" price={stationaryVentsPrice} setPrice={setStationaryVentsPrice} total={stationaryVentsTotal} />
+              <ARow label="Power Vents" qty={powerVentsQty} setQty={setPowerVentsQty} unit="EA" price={powerVentsPrice} setPrice={setPowerVentsPrice} total={powerVentsTotal} />
+              <ARow label="Solar Vents" qty={solarVentsQty} setQty={setSolarVentsQty} unit="EA" price={solarVentsPrice} setPrice={setSolarVentsPrice} total={solarVentsTotal} />
 
               {/* Skylights */}
               <Separator className="my-2" />
@@ -1025,7 +1087,6 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <GroupLabel>Other</GroupLabel>
               <ARow label="Flintlastic" qty={String(roundUp(num(flintlasticQty)))} setQty={setFlintlasticQty} unit="SQ" price={String(FLINTLASTIC_PRICE)} setPrice={() => {}} total={flintlasticTotal} readonlyPrice />
-              <ARow label="Ridge Vent" qty={ridgeVentQty} setQty={setRidgeVentQty} unit="LF" price={rateRV.toFixed(4)} setPrice={() => {}} total={ridgeVentTotal} readonlyPrice />
               {/* Decking with thickness + type selectors */}
               <div className="grid grid-cols-12 gap-2 items-center mb-1">
                 <div className="col-span-4 text-sm font-medium flex items-center gap-1 flex-wrap">
