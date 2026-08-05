@@ -70,9 +70,13 @@ export const estimates = sqliteTable("estimates", {
   // Pipe Boots
   pipeBootsQty: real("pipe_boots_qty"),
   pipeBootsPricePerUnit: real("pipe_boots_price_per_unit"),
-  // Bay Windows / Dormers
+  // Bay Windows / Dormers (retired — kept for old estimates, no longer editable in the UI)
   bayWindowsQty: real("bay_windows_qty"),
   bayWindowsPricePerUnit: real("bay_windows_price_per_unit"),
+  // Chimney — size determines unit price (small=$200, average=$300, large=$400)
+  chimneyQty: real("chimney_qty"),
+  chimneySize: text("chimney_size"), // "small" | "average" | "large"
+  chimneyPricePerUnit: real("chimney_price_per_unit"),
   // Stationary Vents (750/Turtle Vents)
   stationaryVentsQty: real("stationary_vents_qty"),
   stationaryVentsPricePerUnit: real("stationary_vents_price_per_unit"),

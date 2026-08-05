@@ -105,6 +105,9 @@ _addCol("power_vents_qty", "REAL");
 _addCol("power_vents_price_per_unit", "REAL");
 _addCol("solar_vents_qty", "REAL");
 _addCol("solar_vents_price_per_unit", "REAL");
+_addCol("chimney_qty", "REAL");
+_addCol("chimney_size", "TEXT");
+_addCol("chimney_price_per_unit", "REAL");
 
 // ─── Seed / secure default admin account ───────────────────────────────────────
 // Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a

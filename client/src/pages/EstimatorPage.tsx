@@ -110,9 +110,15 @@ const D = {
   stepFlashing: 4.82,    // 1.75+1.07+2
   trimCoil:     3.14,    // 2*1.07+1  (note: spreadsheet has 3.14, not 5.21)
   pipeBoot:     12.84,   // 12*1.07
-  bayWindow:    50.00,
   decking:      40.00,   // 25+15
 };
+
+const CHIMNEY_SIZES: { value: "small" | "average" | "large"; label: string }[] = [
+  { value: "small",   label: "Small (up to 24\"x24\")" },
+  { value: "average", label: "Average (up to 24\"x48\")" },
+  { value: "large",   label: "Large (bigger than 24\"x48\")" },
+];
+const CHIMNEY_PRICES: Record<"small" | "average" | "large", number> = { small: 200, average: 300, large: 400 };
 
 function fmt(v: number) {
   if (!v || v === 0) return "—";
@@ -222,8 +228,8 @@ export default function EstimatorPage() {
   const [pipeBootsQty, setPipeBootsQty] = useState("");
   const [pipeBootsPrice, setPipeBootsPrice] = useState(String(D.pipeBoot));
 
-  const [bayWindowsQty, setBayWindowsQty] = useState("");
-  const [bayWindowsPrice, setBayWindowsPrice] = useState(String(D.bayWindow));
+  const [chimneyQty, setChimneyQty] = useState("");
+  const [chimneySize, setChimneySize] = useState<"small" | "average" | "large">("small");
 
   const [stationaryVentsQty, setStationaryVentsQty] = useState("");
   const [stationaryVentsPrice, setStationaryVentsPrice] = useState("24");
@@ -287,7 +293,8 @@ export default function EstimatorPage() {
   const stepFlashTotal    = num(stepFlashingQty) * num(stepFlashingPrice);
   const trimCoilTotal     = num(trimCoilQty) * num(trimCoilPrice);
   const pipeBootsTotal    = num(pipeBootsQty) * num(pipeBootsPrice);
-  const bayWindowsTotal   = num(bayWindowsQty) * num(bayWindowsPrice);
+  const chimneyPrice      = CHIMNEY_PRICES[chimneySize];
+  const chimneyTotal      = num(chimneyQty) * chimneyPrice;
   const stationaryVentsTotal = num(stationaryVentsQty) * num(stationaryVentsPrice);
   const powerVentsTotal   = num(powerVentsQty) * num(powerVentsPrice);
   const solarVentsTotal   = num(solarVentsQty) * num(solarVentsPrice);
@@ -312,7 +319,7 @@ export default function EstimatorPage() {
   // ─── Markup model ─────────────────────────────────────────────────────────
   const A = shingleTotal + landmarkProTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
     ridgeCapTotal + iceWaterTotal + dripEdgeTotal + stepFlashTotal +
-    trimCoilTotal + pipeBootsTotal + bayWindowsTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
+    trimCoilTotal + pipeBootsTotal + chimneyTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
     ridgeVentTotal + deckingTotal + flintlasticTotal + layersTotal + referralFee + MISC_AMOUNT;
   const B = A * markupRate;
   const E = A + B;
@@ -415,8 +422,8 @@ export default function EstimatorPage() {
     setTrimCoilPrice(String(existingEstimate.trimCoilPricePerUnit ?? D.trimCoil));
     setPipeBootsQty(String(existingEstimate.pipeBootsQty ?? ""));
     setPipeBootsPrice(String(existingEstimate.pipeBootsPricePerUnit ?? D.pipeBoot));
-    setBayWindowsQty(String(existingEstimate.bayWindowsQty ?? ""));
-    setBayWindowsPrice(String(existingEstimate.bayWindowsPricePerUnit ?? D.bayWindow));
+    setChimneyQty(String(existingEstimate.chimneyQty ?? ""));
+    setChimneySize((existingEstimate.chimneySize as "small" | "average" | "large") || "small");
     setStationaryVentsQty(String(existingEstimate.stationaryVentsQty ?? ""));
     setStationaryVentsPrice(String(existingEstimate.stationaryVentsPricePerUnit ?? 24));
     setPowerVentsQty(String(existingEstimate.powerVentsQty ?? ""));
@@ -482,8 +489,9 @@ export default function EstimatorPage() {
     trimCoilPricePerUnit: num(trimCoilPrice),
     pipeBootsQty: num(pipeBootsQty) || null,
     pipeBootsPricePerUnit: num(pipeBootsPrice),
-    bayWindowsQty: num(bayWindowsQty) || null,
-    bayWindowsPricePerUnit: num(bayWindowsPrice),
+    chimneyQty: num(chimneyQty) || null,
+    chimneySize,
+    chimneyPricePerUnit: chimneyPrice,
     stationaryVentsQty: num(stationaryVentsQty) || null,
     stationaryVentsPricePerUnit: num(stationaryVentsPrice),
     powerVentsQty: num(powerVentsQty) || null,
@@ -685,7 +693,19 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <SalesGroupLabel>Openings & Penetrations</SalesGroupLabel>
               <SalesQtyRow label="Pipe Boots" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" />
-              <SalesQtyRow label="Bay Windows / Dormers" qty={bayWindowsQty} setQty={setBayWindowsQty} unit="EA" />
+              <div className="grid grid-cols-12 gap-2 items-center mb-1">
+                <div className="col-span-7 text-sm font-medium flex items-center gap-1 flex-wrap">
+                  <span>Chimney</span>
+                  <Select value={chimneySize} onValueChange={v => setChimneySize(v as "small" | "average" | "large")}>
+                    <SelectTrigger className="text-xs h-6 px-2 w-36 border-dashed"><SelectValue /></SelectTrigger>
+                    <SelectContent>{CHIMNEY_SIZES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-3">
+                  <Input type="number" min="0" value={chimneyQty} onChange={e => setChimneyQty(e.target.value)} placeholder="0" className="text-sm h-8" />
+                </div>
+                <div className="col-span-2 text-xs text-center text-muted-foreground">EA</div>
+              </div>
 
               <Separator className="my-2" />
               <SalesGroupLabel>Ventilation</SalesGroupLabel>
@@ -1026,7 +1046,19 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <GroupLabel>Openings & Penetrations</GroupLabel>
               <ARow label="Pipe Boots" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" price={pipeBootsPrice} setPrice={setPipeBootsPrice} total={pipeBootsTotal} />
-              <ARow label="Bay Windows / Dormers" qty={bayWindowsQty} setQty={setBayWindowsQty} unit="EA" price={bayWindowsPrice} setPrice={setBayWindowsPrice} total={bayWindowsTotal} />
+              <div className="grid grid-cols-12 gap-2 items-center mb-1">
+                <div className="col-span-4 text-sm font-medium flex items-center gap-1 flex-wrap">
+                  <span>Chimney</span>
+                  <Select value={chimneySize} onValueChange={v => setChimneySize(v as "small" | "average" | "large")}>
+                    <SelectTrigger className="text-xs h-6 px-2 w-36 border-dashed"><SelectValue /></SelectTrigger>
+                    <SelectContent>{CHIMNEY_SIZES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2"><Input type="number" min="0" value={chimneyQty} onChange={e => setChimneyQty(e.target.value)} placeholder="0" className="text-sm h-8" /></div>
+                <div className="col-span-1 text-xs text-center text-muted-foreground">EA</div>
+                <div className="col-span-2"><Input type="number" min="0" step="0.01" value={chimneyPrice.toFixed(2)} readOnly className="text-sm h-8 bg-muted" /></div>
+                <div className="col-span-3 text-right text-sm font-semibold">{fmt(chimneyTotal)}</div>
+              </div>
 
               <Separator className="my-2" />
               <GroupLabel>Ventilation</GroupLabel>
