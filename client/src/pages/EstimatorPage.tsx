@@ -55,53 +55,30 @@ function roundUpToTen(x: number) {
   return Math.ceil(x / 10) * 10;
 }
 
-// Hip & Ridge: 25 lf/bundle, bundle cost = 68*1.07+25
+// Hip & Ridge: 25 lf/bundle, bundle cost = 68*1.07+25 — used only as the
+// default $/unit price below; admin can edit the price directly per estimate.
 const HR_BUNDLE_LF   = 25;
 const HR_BUNDLE_COST = 68 * 1.07 + 25;   // $97.76
-function hipRidgeTotal(ft: number) {
-  if (ft <= 0) return 0;
-  return roundUp(ft / HR_BUNDLE_LF) * HR_BUNDLE_COST;
-}
 
 // Starter Strip: 116 lf/bundle, bundle cost = 58*1.07+25
 const ST_BUNDLE_LF   = 116;
 const ST_BUNDLE_COST = 58 * 1.07 + 25;   // $87.06
-function starterTotal2(ft: number) {
-  if (ft <= 0) return 0;
-  return roundUp(ft / ST_BUNDLE_LF) * ST_BUNDLE_COST;
-}
 
 // Synthetic Underlayment: 10 SQ/roll, roll cost = 70*1.07+10
 const UL_ROLL_SQ   = 10;
 const UL_ROLL_COST = 70 * 1.07 + 10;     // $84.90
-function underlayTotal2(sq: number) {
-  if (sq <= 0) return 0;
-  return roundUp(sq / UL_ROLL_SQ) * UL_ROLL_COST;
-}
 
 // Ice & Water Shield: 66 lf/roll (= 2 SQ), roll cost = 70*1.07+10
 const IW_ROLL_LF   = 66;
 const IW_ROLL_COST = 70 * 1.07 + 10;     // $84.90
-function iceWaterTotal2(ft: number) {
-  if (ft <= 0) return 0;
-  return roundUp(ft / IW_ROLL_LF) * IW_ROLL_COST;
-}
 
 // Drip Edge: 10 lf/piece, piece cost = 10*1.07+10
 const DE_PIECE_LF   = 10;
 const DE_PIECE_COST = 10 * 1.07 + 10;    // $20.70
-function dripEdgeTotal2(ft: number) {
-  if (ft <= 0) return 0;
-  return roundUp(ft / DE_PIECE_LF) * DE_PIECE_COST;
-}
 
 // Ridge Vent: 4 lf/piece, piece cost = 9.25*1.07+4
 const RV_PIECE_LF   = 4;
 const RV_PIECE_COST = 9.25 * 1.07 + 4;   // $13.8975
-function ridgeVentTotal2(ft: number) {
-  if (ft <= 0) return 0;
-  return roundUp(ft / RV_PIECE_LF) * RV_PIECE_COST;
-}
 
 // Fixed per-unit items (no bundling logic needed)
 const D = {
@@ -158,13 +135,17 @@ function buildSkylightItem(overrides: Partial<SkylightItem> = {}): SkylightItem 
 function buildChimneyItem(overrides: Partial<ChimneyItem> = {}): ChimneyItem {
   const size = overrides.size ?? "small";
   const qty = overrides.qty ?? 1;
-  const pricePerUnit = CHIMNEY_PRICES[size];
+  const pricePerUnit = overrides.pricePerUnit ?? CHIMNEY_PRICES[size];
+  const materialPricePerUnit = overrides.materialPricePerUnit ?? 0;
+  // Tax isn't applied here — new items always start with materialPricePerUnit
+  // at 0, so tax has no effect until updateChimney recomputes it in-component.
   return {
     id: uid(),
     size,
     qty,
     pricePerUnit,
-    lineTotal: pricePerUnit * qty,
+    materialPricePerUnit,
+    lineTotal: materialPricePerUnit * qty + pricePerUnit * qty,
     ...overrides,
   };
 }
@@ -186,6 +167,10 @@ export default function EstimatorPage() {
   // Markup rate — editable by admin
   const [markupRateInput, setMarkupRateInput] = useState(String(DEFAULT_MARKUP_RATE * 100));
   const markupRate = Math.max(0, Math.min(100, num(markupRateInput))) / 100;
+
+  // Material Tax % — applied to every material price below (labor is untaxed)
+  const [materialTaxRateInput, setMaterialTaxRateInput] = useState("0");
+  const materialTaxRate = Math.max(0, num(materialTaxRateInput)) / 100;
 
   // Customer
   const [customerName, setCustomerName] = useState("");
@@ -216,48 +201,68 @@ export default function EstimatorPage() {
   const wasteMultiplier = 1 + num(wastePercent) / 100;
   const totalWithWaste = roundUpToThird(totalRawSq * wasteMultiplier);
 
-  // Materials
+  // Materials — each item has a Labor $/unit (the historical single price) and
+  // a Material $/unit (new; defaults to 0 until broken out from the labor number).
   const [shingleType, setShingleType] = useState("Landmark");
   const [shingleColor, setShingleColor] = useState("");
   const [shingleQty, setShingleQty] = useState("");
   const [shinglePrice, setShinglePrice] = useState(String(D.shingle));
+  const [shingleMaterialPrice, setShingleMaterialPrice] = useState("0");
 
   const [underlaymentQty, setUnderlaymentQty] = useState("");
+  const [underlaymentPrice, setUnderlaymentPrice] = useState((UL_ROLL_COST / UL_ROLL_SQ).toFixed(4));
+  const [underlaymentMaterialPrice, setUnderlaymentMaterialPrice] = useState("0");
 
   const [starterQty, setStarterQty] = useState("");
+  const [starterPrice, setStarterPrice] = useState((ST_BUNDLE_COST / ST_BUNDLE_LF).toFixed(4));
+  const [starterMaterialPrice, setStarterMaterialPrice] = useState("0");
 
   const [ridgeCapQty, setRidgeCapQty] = useState("");
+  const [ridgeCapPrice, setRidgeCapPrice] = useState((HR_BUNDLE_COST / HR_BUNDLE_LF).toFixed(4));
+  const [ridgeCapMaterialPrice, setRidgeCapMaterialPrice] = useState("0");
 
   const [iceWaterQty, setIceWaterQty] = useState("");
+  const [iceWaterPrice, setIceWaterPrice] = useState((IW_ROLL_COST / IW_ROLL_LF).toFixed(4));
+  const [iceWaterMaterialPrice, setIceWaterMaterialPrice] = useState("0");
 
   const [dripEdgeQty, setDripEdgeQty] = useState("");
   const [dripEdgeColor, setDripEdgeColor] = useState("White");
+  const [dripEdgePrice, setDripEdgePrice] = useState((DE_PIECE_COST / DE_PIECE_LF).toFixed(4));
+  const [dripEdgeMaterialPrice, setDripEdgeMaterialPrice] = useState("0");
 
   const [stepFlashingQty, setStepFlashingQty] = useState("");
   const [stepFlashingPrice, setStepFlashingPrice] = useState(String(D.stepFlashing));
+  const [stepFlashingMaterialPrice, setStepFlashingMaterialPrice] = useState("0");
 
   const [trimCoilQty, setTrimCoilQty] = useState("");
   const [trimCoilPrice, setTrimCoilPrice] = useState(String(D.trimCoil));
+  const [trimCoilMaterialPrice, setTrimCoilMaterialPrice] = useState("0");
 
   const [pipeBootsQty, setPipeBootsQty] = useState("");
   const [pipeBootsPrice, setPipeBootsPrice] = useState(String(D.pipeBoot));
+  const [pipeBootsMaterialPrice, setPipeBootsMaterialPrice] = useState("0");
 
   // Chimneys — dynamic array, same pattern as skylights
   const [chimneys, setChimneys] = useState<ChimneyItem[]>([]);
 
   const [stationaryVentsQty, setStationaryVentsQty] = useState("");
   const [stationaryVentsPrice, setStationaryVentsPrice] = useState("24");
+  const [stationaryVentsMaterialPrice, setStationaryVentsMaterialPrice] = useState("0");
 
   const [powerVentsQty, setPowerVentsQty] = useState("");
   const [powerVentsPrice, setPowerVentsPrice] = useState("200");
+  const [powerVentsMaterialPrice, setPowerVentsMaterialPrice] = useState("0");
 
   const [solarVentsQty, setSolarVentsQty] = useState("");
   const [solarVentsPrice, setSolarVentsPrice] = useState("650");
+  const [solarVentsMaterialPrice, setSolarVentsMaterialPrice] = useState("0");
 
   // Skylights — dynamic array
   const [skylights, setSkylights] = useState<SkylightItem[]>([]);
 
   const [ridgeVentQty, setRidgeVentQty] = useState("");
+  const [ridgeVentPrice, setRidgeVentPrice] = useState((RV_PIECE_COST / RV_PIECE_LF).toFixed(4));
+  const [ridgeVentMaterialPrice, setRidgeVentMaterialPrice] = useState("0");
 
   // Referral fee
   const [referralFee, setReferralFee] = useState<0 | 100 | 200>(0);
@@ -265,11 +270,13 @@ export default function EstimatorPage() {
 
   const [deckingQty, setDeckingQty] = useState("");
   const [deckingPrice, setDeckingPrice] = useState(String(D.decking));
+  const [deckingMaterialPrice, setDeckingMaterialPrice] = useState("0");
   const [deckingThickness, setDeckingThickness] = useState("7/16\"");
   const [deckingType, setDeckingType] = useState("OSB");
 
   const [flintlasticQty, setFlintlasticQty] = useState("");
-  const FLINTLASTIC_PRICE = 301;
+  const [flintlasticPrice, setFlintlasticPrice] = useState("301");
+  const [flintlasticMaterialPrice, setFlintlasticMaterialPrice] = useState("0");
 
   // Auto-fill underlayment with total sq + waste, rounded up to the nearest
   // 10 SQ since synthetic underlayment sells in 10 SQ rolls.
@@ -297,37 +304,35 @@ export default function EstimatorPage() {
   })();
   const steepPitchAdderTotal = num(shingleQty) * totalSteepAdderPerSq;
 
-  const shingleTotal      = num(shingleQty) * num(shinglePrice);
+  // Cost helper: qty × (material $/unit taxed by materialTaxRate + labor $/unit)
+  const costOf = (qty: number, materialPrice: number, laborPrice: number) =>
+    qty * (materialPrice * (1 + materialTaxRate) + laborPrice);
+
+  const shingleTotal      = costOf(num(shingleQty), num(shingleMaterialPrice), num(shinglePrice));
   const landmarkProTotal  = num(shingleQty) * landmarkProUpcharge;
-  const underlayTotal     = underlayTotal2(num(underlaymentQty));
-  const starterTotal      = starterTotal2(num(starterQty));
-  const ridgeCapTotal     = hipRidgeTotal(num(ridgeCapQty));
-  const iceWaterTotal     = iceWaterTotal2(num(iceWaterQty));
-  const dripEdgeTotal     = dripEdgeTotal2(num(dripEdgeQty));
-  const stepFlashTotal    = num(stepFlashingQty) * num(stepFlashingPrice);
-  const trimCoilTotal     = num(trimCoilQty) * num(trimCoilPrice);
-  const pipeBootsTotal    = num(pipeBootsQty) * num(pipeBootsPrice);
-  const chimneysTotal     = chimneys.reduce((s, c) => s + c.lineTotal, 0);
-  const stationaryVentsTotal = num(stationaryVentsQty) * num(stationaryVentsPrice);
-  const powerVentsTotal   = num(powerVentsQty) * num(powerVentsPrice);
-  const solarVentsTotal   = num(solarVentsQty) * num(solarVentsPrice);
+  const underlayTotal     = costOf(num(underlaymentQty), num(underlaymentMaterialPrice), num(underlaymentPrice));
+  const starterTotal      = costOf(num(starterQty), num(starterMaterialPrice), num(starterPrice));
+  const ridgeCapTotal     = costOf(num(ridgeCapQty), num(ridgeCapMaterialPrice), num(ridgeCapPrice));
+  const iceWaterTotal     = costOf(num(iceWaterQty), num(iceWaterMaterialPrice), num(iceWaterPrice));
+  const dripEdgeTotal     = costOf(num(dripEdgeQty), num(dripEdgeMaterialPrice), num(dripEdgePrice));
+  const stepFlashTotal    = costOf(num(stepFlashingQty), num(stepFlashingMaterialPrice), num(stepFlashingPrice));
+  const trimCoilTotal     = costOf(num(trimCoilQty), num(trimCoilMaterialPrice), num(trimCoilPrice));
+  const pipeBootsTotal    = costOf(num(pipeBootsQty), num(pipeBootsMaterialPrice), num(pipeBootsPrice));
+  // Chimneys: computed live from qty/material/labor rather than the stored
+  // lineTotal, so an edit to the global Tax % updates existing chimneys too.
+  const chimneysTotal     = chimneys.reduce((s, c) => s + costOf(c.qty, c.materialPricePerUnit ?? 0, c.pricePerUnit), 0);
+  const stationaryVentsTotal = costOf(num(stationaryVentsQty), num(stationaryVentsMaterialPrice), num(stationaryVentsPrice));
+  const powerVentsTotal   = costOf(num(powerVentsQty), num(powerVentsMaterialPrice), num(powerVentsPrice));
+  const solarVentsTotal   = costOf(num(solarVentsQty), num(solarVentsMaterialPrice), num(solarVentsPrice));
   const skylightsTotal    = skylights.reduce((s, sk) => s + sk.lineTotal, 0);
-  const ridgeVentTotal    = ridgeVentTotal2(num(ridgeVentQty));
-  const deckingTotal      = num(deckingQty) * num(deckingPrice);
-  const flintlasticTotal  = roundUp(num(flintlasticQty)) * FLINTLASTIC_PRICE;
+  const ridgeVentTotal    = costOf(num(ridgeVentQty), num(ridgeVentMaterialPrice), num(ridgeVentPrice));
+  const deckingTotal      = costOf(num(deckingQty), num(deckingMaterialPrice), num(deckingPrice));
+  const flintlasticTotal  = costOf(roundUp(num(flintlasticQty)), num(flintlasticMaterialPrice), num(flintlasticPrice));
 
   // Layers to Remove — tear-off surcharge: $30/SQ for each layer above the first,
   // applied across the total SQ with waste (all roof sections combined).
   const layersRate  = 30 * Math.max(0, num(layersToRemove) - 1);
   const layersTotal = totalWithWaste * layersRate;
-
-  // Effective per-unit display rates (for admin view $/Unit column)
-  const qUL = num(underlaymentQty);  const rateUL = qUL > 0 ? underlayTotal / qUL : UL_ROLL_COST / UL_ROLL_SQ;
-  const qST = num(starterQty);       const rateST = qST > 0 ? starterTotal / qST : ST_BUNDLE_COST / ST_BUNDLE_LF;
-  const qHR = num(ridgeCapQty);      const rateHR = qHR > 0 ? ridgeCapTotal / qHR : HR_BUNDLE_COST / HR_BUNDLE_LF;
-  const qIW = num(iceWaterQty);      const rateIW = qIW > 0 ? iceWaterTotal / qIW : IW_ROLL_COST / IW_ROLL_LF;
-  const qDE = num(dripEdgeQty);      const rateDE = qDE > 0 ? dripEdgeTotal / qDE : DE_PIECE_COST / DE_PIECE_LF;
-  const qRV = num(ridgeVentQty);     const rateRV = qRV > 0 ? ridgeVentTotal / qRV : RV_PIECE_COST / RV_PIECE_LF;
 
   // ─── Markup model ─────────────────────────────────────────────────────────
   const A = shingleTotal + landmarkProTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
@@ -418,12 +423,14 @@ export default function EstimatorPage() {
     setChimneys(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...changes };
-      // Changing size resets to that size's default price; editing price
-      // directly (or just changing qty) leaves the current price alone.
+      // Changing size resets to that size's default labor price; editing
+      // price directly (or just changing qty) leaves the current price alone.
       if (changes.size !== undefined && changes.pricePerUnit === undefined) {
         updated.pricePerUnit = CHIMNEY_PRICES[changes.size];
       }
-      updated.lineTotal = updated.pricePerUnit * (updated.qty ?? 1);
+      const qty = updated.qty ?? 1;
+      const materialPricePerUnit = updated.materialPricePerUnit ?? 0;
+      updated.lineTotal = qty * (materialPricePerUnit * (1 + materialTaxRate) + updated.pricePerUnit);
       return updated;
     }));
   };
@@ -444,25 +451,44 @@ export default function EstimatorPage() {
     setCustomerEmail(existingEstimate.customerEmail || "");
     setNotes(existingEstimate.notes || "");
     setWastePercent(String(existingEstimate.wastePercent ?? 15));
+    setMaterialTaxRateInput(String(existingEstimate.materialTaxRate ?? 0));
     setLayersToRemove(String(existingEstimate.layersToRemove ?? 1));
     setShingleType(existingEstimate.shingleType || "Landmark");
     setShingleColor(existingEstimate.shingleColor || "");
     setShingleQty(String(existingEstimate.shingleQty ?? ""));
     setShinglePrice(String(existingEstimate.shinglePricePerSq ?? D.shingle));
+    setShingleMaterialPrice(String(existingEstimate.shingleMaterialPricePerSq ?? 0));
     setUnderlaymentQty(String(existingEstimate.underlaymentQty ?? ""));
+    setUnderlaymentPrice(String(existingEstimate.underlaymentPricePerSq ?? (UL_ROLL_COST / UL_ROLL_SQ).toFixed(4)));
+    setUnderlaymentMaterialPrice(String(existingEstimate.underlaymentMaterialPricePerSq ?? 0));
     setStarterQty(String(existingEstimate.starterQty ?? ""));
+    setStarterPrice(String(existingEstimate.starterPricePerUnit ?? (ST_BUNDLE_COST / ST_BUNDLE_LF).toFixed(4)));
+    setStarterMaterialPrice(String(existingEstimate.starterMaterialPricePerUnit ?? 0));
     setRidgeCapQty(String(existingEstimate.ridgeCapQty ?? ""));
+    setRidgeCapPrice(String(existingEstimate.ridgeCapPricePerUnit ?? (HR_BUNDLE_COST / HR_BUNDLE_LF).toFixed(4)));
+    setRidgeCapMaterialPrice(String(existingEstimate.ridgeCapMaterialPricePerUnit ?? 0));
     setIceWaterQty(String(existingEstimate.iceWaterQty ?? ""));
+    setIceWaterPrice(String(existingEstimate.iceWaterPricePerUnit ?? (IW_ROLL_COST / IW_ROLL_LF).toFixed(4)));
+    setIceWaterMaterialPrice(String(existingEstimate.iceWaterMaterialPricePerUnit ?? 0));
     setDripEdgeQty(String(existingEstimate.dripEdgeQty ?? ""));
     setDripEdgeColor(existingEstimate.dripEdgeColor || "White");
+    setDripEdgePrice(String(existingEstimate.dripEdgePricePerUnit ?? (DE_PIECE_COST / DE_PIECE_LF).toFixed(4)));
+    setDripEdgeMaterialPrice(String(existingEstimate.dripEdgeMaterialPricePerUnit ?? 0));
     setStepFlashingQty(String(existingEstimate.stepFlashingQty ?? ""));
     setStepFlashingPrice(String(existingEstimate.stepFlashingPricePerUnit ?? D.stepFlashing));
+    setStepFlashingMaterialPrice(String(existingEstimate.stepFlashingMaterialPricePerUnit ?? 0));
     setTrimCoilQty(String(existingEstimate.trimCoilQty ?? ""));
     setTrimCoilPrice(String(existingEstimate.trimCoilPricePerUnit ?? D.trimCoil));
+    setTrimCoilMaterialPrice(String(existingEstimate.trimCoilMaterialPricePerUnit ?? 0));
     setPipeBootsQty(String(existingEstimate.pipeBootsQty ?? ""));
     setPipeBootsPrice(String(existingEstimate.pipeBootsPricePerUnit ?? D.pipeBoot));
+    setPipeBootsMaterialPrice(String(existingEstimate.pipeBootsMaterialPricePerUnit ?? 0));
     if (existingEstimate.chimneysJson) {
-      try { setChimneys(JSON.parse(existingEstimate.chimneysJson)); } catch {}
+      try {
+        const parsed = JSON.parse(existingEstimate.chimneysJson) as ChimneyItem[];
+        // Normalize chimneys saved before the material/labor split existed
+        setChimneys(parsed.map(c => ({ ...c, materialPricePerUnit: c.materialPricePerUnit ?? 0 })));
+      } catch {}
     } else if (existingEstimate.chimneyQty) {
       // Migrate old single-item chimney estimates into the new array format
       setChimneys([buildChimneyItem({
@@ -472,13 +498,22 @@ export default function EstimatorPage() {
     }
     setStationaryVentsQty(String(existingEstimate.stationaryVentsQty ?? ""));
     setStationaryVentsPrice(String(existingEstimate.stationaryVentsPricePerUnit ?? 24));
+    setStationaryVentsMaterialPrice(String(existingEstimate.stationaryVentsMaterialPricePerUnit ?? 0));
     setPowerVentsQty(String(existingEstimate.powerVentsQty ?? ""));
     setPowerVentsPrice(String(existingEstimate.powerVentsPricePerUnit ?? 200));
+    setPowerVentsMaterialPrice(String(existingEstimate.powerVentsMaterialPricePerUnit ?? 0));
     setSolarVentsQty(String(existingEstimate.solarVentsQty ?? ""));
     setSolarVentsPrice(String(existingEstimate.solarVentsPricePerUnit ?? 650));
+    setSolarVentsMaterialPrice(String(existingEstimate.solarVentsMaterialPricePerUnit ?? 0));
     setRidgeVentQty(String(existingEstimate.ventilationQty ?? ""));
+    setRidgeVentPrice(String(existingEstimate.ventilationPricePerUnit ?? (RV_PIECE_COST / RV_PIECE_LF).toFixed(4)));
+    setRidgeVentMaterialPrice(String(existingEstimate.ventilationMaterialPricePerUnit ?? 0));
     setDeckingQty(String(existingEstimate.deckingQty ?? ""));
     setDeckingPrice(String(existingEstimate.deckingPricePerUnit ?? D.decking));
+    setDeckingMaterialPrice(String(existingEstimate.deckingMaterialPricePerUnit ?? 0));
+    setFlintlasticQty(String(existingEstimate.flintlasticQty ?? ""));
+    setFlintlasticPrice(String(existingEstimate.flintlasticPricePerUnit ?? 301));
+    setFlintlasticMaterialPrice(String(existingEstimate.flintlasticMaterialPricePerUnit ?? 0));
     if (existingEstimate.referralFee === 100 || existingEstimate.referralFee === 200) {
       setReferralFee(existingEstimate.referralFee);
     } else {
@@ -511,42 +546,60 @@ export default function EstimatorPage() {
     wastePercent: num(wastePercent),
     totalSquares: totalRawSq,
     totalSquaresWithWaste: totalWithWaste,
+    materialTaxRate: num(materialTaxRateInput) || 0,
     layersToRemove: num(layersToRemove) || 1,
     layersQty: totalWithWaste || null,
     layersPricePerUnit: layersRate,
     shingleType, shingleColor: shingleColor || null,
     shingleQty: num(shingleQty) || null,
     shinglePricePerSq: num(shinglePrice),
+    shingleMaterialPricePerSq: num(shingleMaterialPrice),
     landmarkProUpcharge,
     underlaymentQty: num(underlaymentQty) || null,
-    underlaymentPricePerSq: rateUL,
+    underlaymentPricePerSq: num(underlaymentPrice),
+    underlaymentMaterialPricePerSq: num(underlaymentMaterialPrice),
     starterQty: num(starterQty) || null,
-    starterPricePerUnit: rateST,
+    starterPricePerUnit: num(starterPrice),
+    starterMaterialPricePerUnit: num(starterMaterialPrice),
     ridgeCapQty: num(ridgeCapQty) || null,
-    ridgeCapPricePerUnit: rateHR,
+    ridgeCapPricePerUnit: num(ridgeCapPrice),
+    ridgeCapMaterialPricePerUnit: num(ridgeCapMaterialPrice),
     iceWaterQty: num(iceWaterQty) || null,
-    iceWaterPricePerUnit: rateIW,
+    iceWaterPricePerUnit: num(iceWaterPrice),
+    iceWaterMaterialPricePerUnit: num(iceWaterMaterialPrice),
     dripEdgeQty: num(dripEdgeQty) || null,
     dripEdgeColor,
-    dripEdgePricePerUnit: rateDE,
+    dripEdgePricePerUnit: num(dripEdgePrice),
+    dripEdgeMaterialPricePerUnit: num(dripEdgeMaterialPrice),
     stepFlashingQty: num(stepFlashingQty) || null,
     stepFlashingPricePerUnit: num(stepFlashingPrice),
+    stepFlashingMaterialPricePerUnit: num(stepFlashingMaterialPrice),
     trimCoilQty: num(trimCoilQty) || null,
     trimCoilPricePerUnit: num(trimCoilPrice),
+    trimCoilMaterialPricePerUnit: num(trimCoilMaterialPrice),
     pipeBootsQty: num(pipeBootsQty) || null,
     pipeBootsPricePerUnit: num(pipeBootsPrice),
+    pipeBootsMaterialPricePerUnit: num(pipeBootsMaterialPrice),
     chimneysJson: chimneys.length ? JSON.stringify(chimneys) : null,
     stationaryVentsQty: num(stationaryVentsQty) || null,
     stationaryVentsPricePerUnit: num(stationaryVentsPrice),
+    stationaryVentsMaterialPricePerUnit: num(stationaryVentsMaterialPrice),
     powerVentsQty: num(powerVentsQty) || null,
     powerVentsPricePerUnit: num(powerVentsPrice),
+    powerVentsMaterialPricePerUnit: num(powerVentsMaterialPrice),
     solarVentsQty: num(solarVentsQty) || null,
     solarVentsPricePerUnit: num(solarVentsPrice),
+    solarVentsMaterialPricePerUnit: num(solarVentsMaterialPrice),
     skylightsJson: skylights.length ? JSON.stringify(skylights) : null,
     ventilationQty: num(ridgeVentQty) || null,
-    ventilationPricePerUnit: rateRV,
+    ventilationPricePerUnit: num(ridgeVentPrice),
+    ventilationMaterialPricePerUnit: num(ridgeVentMaterialPrice),
     deckingQty: num(deckingQty) || null,
     deckingPricePerUnit: num(deckingPrice),
+    deckingMaterialPricePerUnit: num(deckingMaterialPrice),
+    flintlasticQty: num(flintlasticQty) || null,
+    flintlasticPricePerUnit: num(flintlasticPrice),
+    flintlasticMaterialPricePerUnit: num(flintlasticMaterialPrice),
     referralFee: referralFee || null,
     referralName: referralName || null,
     miscAmount: MISC_AMOUNT,
@@ -1064,7 +1117,7 @@ export default function EstimatorPage() {
                   <Input value={shingleColor} onChange={e => setShingleColor(e.target.value)} placeholder="Color..." className="text-sm h-8" />
                 </div>
               </div>
-              <ARow label={shingleType} qty={shingleQty} setQty={setShingleQty} unit="SQ" price={shinglePrice} setPrice={setShinglePrice} total={shingleTotal} />
+              <MLRow label={shingleType} qty={shingleQty} setQty={setShingleQty} unit="SQ" materialPrice={shingleMaterialPrice} setMaterialPrice={setShingleMaterialPrice} laborPrice={shinglePrice} setLaborPrice={setShinglePrice} total={shingleTotal} />
               {shingleType === "Landmark PRO" && (
                 <ARow label="Landmark PRO (+$20/SQ)" qty={shingleQty} setQty={() => {}} unit="SQ" price={String(D.proUpcharge)} setPrice={() => {}} total={landmarkProTotal} readonlyQty readonlyPrice highlight />
               )}
@@ -1077,32 +1130,31 @@ export default function EstimatorPage() {
 
               <Separator className="my-2" />
               <GroupLabel>Underlayment & Accessories</GroupLabel>
-              <ARow label="Synthetic Underlayment" qty={underlaymentQty} setQty={setUnderlaymentQty} unit="SQ" price={rateUL.toFixed(4)} setPrice={() => {}} total={underlayTotal} prefilled readonlyPrice />
-              <ARow label="Starter Strip" qty={starterQty} setQty={setStarterQty} unit="FT" price={rateST.toFixed(4)} setPrice={() => {}} total={starterTotal} readonlyPrice />
-              <ARow label="Hip & Ridge" qty={ridgeCapQty} setQty={setRidgeCapQty} unit="FT" price={rateHR.toFixed(4)} setPrice={() => {}} total={ridgeCapTotal} readonlyPrice />
-              <ARow label="Ice & Water Shield" qty={iceWaterQty} setQty={setIceWaterQty} unit="FT" price={rateIW.toFixed(4)} setPrice={() => {}} total={iceWaterTotal} readonlyPrice />
+              <MLRow label="Synthetic Underlayment" qty={underlaymentQty} setQty={setUnderlaymentQty} unit="SQ" materialPrice={underlaymentMaterialPrice} setMaterialPrice={setUnderlaymentMaterialPrice} laborPrice={underlaymentPrice} setLaborPrice={setUnderlaymentPrice} total={underlayTotal} prefilled />
+              <MLRow label="Starter Strip" qty={starterQty} setQty={setStarterQty} unit="FT" materialPrice={starterMaterialPrice} setMaterialPrice={setStarterMaterialPrice} laborPrice={starterPrice} setLaborPrice={setStarterPrice} total={starterTotal} />
+              <MLRow label="Hip & Ridge" qty={ridgeCapQty} setQty={setRidgeCapQty} unit="FT" materialPrice={ridgeCapMaterialPrice} setMaterialPrice={setRidgeCapMaterialPrice} laborPrice={ridgeCapPrice} setLaborPrice={setRidgeCapPrice} total={ridgeCapTotal} />
+              <MLRow label="Ice & Water Shield" qty={iceWaterQty} setQty={setIceWaterQty} unit="FT" materialPrice={iceWaterMaterialPrice} setMaterialPrice={setIceWaterMaterialPrice} laborPrice={iceWaterPrice} setLaborPrice={setIceWaterPrice} total={iceWaterTotal} />
 
               <Separator className="my-2" />
               <GroupLabel>Flashing & Metal</GroupLabel>
-              <div className="grid grid-cols-12 gap-2 items-center mb-1">
-                <div className="col-span-4 text-sm font-medium flex items-center gap-1 flex-wrap">
+              <MLRow
+                label={<>
                   <span>Drip Edge</span>
                   <Select value={dripEdgeColor} onValueChange={setDripEdgeColor}>
                     <SelectTrigger className="text-xs h-6 px-2 w-28 border-dashed"><SelectValue /></SelectTrigger>
                     <SelectContent>{DRIP_EDGE_COLORS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                   </Select>
-                </div>
-                <div className="col-span-2"><Input type="number" min="0" value={dripEdgeQty} onChange={e => setDripEdgeQty(e.target.value)} placeholder="0" className="text-sm h-8" /></div>
-                <div className="col-span-1 text-xs text-center text-muted-foreground">FT</div>
-                <div className="col-span-2"><Input type="number" min="0" step="0.01" value={rateDE.toFixed(4)} readOnly placeholder="0.00" className="text-sm h-8 bg-muted" /></div>
-                <div className="col-span-3 text-right text-sm font-semibold">{fmt(dripEdgeTotal)}</div>
-              </div>
-              <ARow label="Alum. Step Flashing" qty={stepFlashingQty} setQty={setStepFlashingQty} unit="FT" price={stepFlashingPrice} setPrice={setStepFlashingPrice} total={stepFlashTotal} />
-              <ARow label="Trim Coil" qty={trimCoilQty} setQty={setTrimCoilQty} unit="FT" price={trimCoilPrice} setPrice={setTrimCoilPrice} total={trimCoilTotal} />
+                </>}
+                qty={dripEdgeQty} setQty={setDripEdgeQty} unit="FT"
+                materialPrice={dripEdgeMaterialPrice} setMaterialPrice={setDripEdgeMaterialPrice}
+                laborPrice={dripEdgePrice} setLaborPrice={setDripEdgePrice} total={dripEdgeTotal}
+              />
+              <MLRow label="Alum. Step Flashing" qty={stepFlashingQty} setQty={setStepFlashingQty} unit="FT" materialPrice={stepFlashingMaterialPrice} setMaterialPrice={setStepFlashingMaterialPrice} laborPrice={stepFlashingPrice} setLaborPrice={setStepFlashingPrice} total={stepFlashTotal} />
+              <MLRow label="Trim Coil" qty={trimCoilQty} setQty={setTrimCoilQty} unit="FT" materialPrice={trimCoilMaterialPrice} setMaterialPrice={setTrimCoilMaterialPrice} laborPrice={trimCoilPrice} setLaborPrice={setTrimCoilPrice} total={trimCoilTotal} />
 
               <Separator className="my-2" />
               <GroupLabel>Openings & Penetrations</GroupLabel>
-              <ARow label="Pipe Boots (incl Rain Collars)" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" price={pipeBootsPrice} setPrice={setPipeBootsPrice} total={pipeBootsTotal} />
+              <MLRow label="Pipe Boots (incl Rain Collars)" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" materialPrice={pipeBootsMaterialPrice} setMaterialPrice={setPipeBootsMaterialPrice} laborPrice={pipeBootsPrice} setLaborPrice={setPipeBootsPrice} total={pipeBootsTotal} />
               <div className="flex items-center justify-between mb-1 mt-1">
                 <span className="text-xs font-semibold text-muted-foreground">Chimneys</span>
                 <Button variant="outline" size="sm" onClick={addChimney} className="gap-1 text-xs h-7 print:hidden">
@@ -1113,29 +1165,40 @@ export default function EstimatorPage() {
                 <p className="text-xs text-muted-foreground mb-2 italic">No chimneys added.</p>
               )}
               {chimneys.map((c) => (
-                <div key={c.id} className="grid grid-cols-12 gap-2 items-center mb-1">
-                  <div className="col-span-4">
-                    <Select value={c.size} onValueChange={v => updateChimney(c.id, { size: v as "small" | "average" | "large" })}>
-                      <SelectTrigger className="text-xs h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent>{CHIMNEY_SIZES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
-                    </Select>
+                <div key={c.id} className="mb-2 pb-2 border-b border-dashed border-border/60 last:border-0 last:mb-1 last:pb-0">
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-4">
+                      <Select value={c.size} onValueChange={v => updateChimney(c.id, { size: v as "small" | "average" | "large" })}>
+                        <SelectTrigger className="text-xs h-8"><SelectValue /></SelectTrigger>
+                        <SelectContent>{CHIMNEY_SIZES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2"><Input type="number" min="1" value={c.qty} onChange={e => updateChimney(c.id, { qty: num(e.target.value) })} placeholder="Qty" className="text-sm h-8" /></div>
+                    <div className="col-span-1 text-xs text-center text-muted-foreground">EA</div>
+                    <div className="col-span-2 text-right text-sm font-semibold">{fmt(c.lineTotal)}</div>
+                    <div className="col-span-3 flex justify-end">
+                      <Button variant="ghost" size="sm" onClick={() => removeChimney(c.id)} className="h-7 w-7 p-0 text-destructive print:hidden"><Trash2 size={13} /></Button>
+                    </div>
                   </div>
-                  <div className="col-span-2"><Input type="number" min="1" value={c.qty} onChange={e => updateChimney(c.id, { qty: num(e.target.value) })} placeholder="Qty" className="text-sm h-8" /></div>
-                  <div className="col-span-1 text-xs text-center text-muted-foreground">EA</div>
-                  <div className="col-span-2"><Input type="number" min="0" step="0.01" value={c.pricePerUnit} onChange={e => updateChimney(c.id, { pricePerUnit: num(e.target.value) })} className="text-sm h-8" /></div>
-                  <div className="col-span-2 text-right text-sm font-semibold">{fmt(c.lineTotal)}</div>
-                  <div className="col-span-1 flex justify-end">
-                    <Button variant="ghost" size="sm" onClick={() => removeChimney(c.id)} className="h-7 w-7 p-0 text-destructive print:hidden"><Trash2 size={13} /></Button>
+                  <div className="flex items-center gap-3 mt-1">
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground shrink-0">Material</span>
+                      <Input type="number" min="0" step="0.01" value={c.materialPricePerUnit ?? 0} onChange={e => updateChimney(c.id, { materialPricePerUnit: num(e.target.value) })} placeholder="0.00" className="text-sm h-7" />
+                    </div>
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground shrink-0">Labor</span>
+                      <Input type="number" min="0" step="0.01" value={c.pricePerUnit} onChange={e => updateChimney(c.id, { pricePerUnit: num(e.target.value) })} className="text-sm h-7" />
+                    </div>
                   </div>
                 </div>
               ))}
 
               <Separator className="my-2" />
               <GroupLabel>Ventilation</GroupLabel>
-              <ARow label="Ridge Vent" qty={ridgeVentQty} setQty={setRidgeVentQty} unit="LF" price={rateRV.toFixed(4)} setPrice={() => {}} total={ridgeVentTotal} readonlyPrice />
-              <ARow label="750 Vents" qty={stationaryVentsQty} setQty={setStationaryVentsQty} unit="EA" price={stationaryVentsPrice} setPrice={setStationaryVentsPrice} total={stationaryVentsTotal} />
-              <ARow label="Power Vents" qty={powerVentsQty} setQty={setPowerVentsQty} unit="EA" price={powerVentsPrice} setPrice={setPowerVentsPrice} total={powerVentsTotal} />
-              <ARow label="Solar Vents" qty={solarVentsQty} setQty={setSolarVentsQty} unit="EA" price={solarVentsPrice} setPrice={setSolarVentsPrice} total={solarVentsTotal} />
+              <MLRow label="Ridge Vent" qty={ridgeVentQty} setQty={setRidgeVentQty} unit="LF" materialPrice={ridgeVentMaterialPrice} setMaterialPrice={setRidgeVentMaterialPrice} laborPrice={ridgeVentPrice} setLaborPrice={setRidgeVentPrice} total={ridgeVentTotal} />
+              <MLRow label="750 Vents" qty={stationaryVentsQty} setQty={setStationaryVentsQty} unit="EA" materialPrice={stationaryVentsMaterialPrice} setMaterialPrice={setStationaryVentsMaterialPrice} laborPrice={stationaryVentsPrice} setLaborPrice={setStationaryVentsPrice} total={stationaryVentsTotal} />
+              <MLRow label="Power Vents" qty={powerVentsQty} setQty={setPowerVentsQty} unit="EA" materialPrice={powerVentsMaterialPrice} setMaterialPrice={setPowerVentsMaterialPrice} laborPrice={powerVentsPrice} setLaborPrice={setPowerVentsPrice} total={powerVentsTotal} />
+              <MLRow label="Solar Vents" qty={solarVentsQty} setQty={setSolarVentsQty} unit="EA" materialPrice={solarVentsMaterialPrice} setMaterialPrice={setSolarVentsMaterialPrice} laborPrice={solarVentsPrice} setLaborPrice={setSolarVentsPrice} total={solarVentsTotal} />
 
               {/* Skylights */}
               <Separator className="my-2" />
@@ -1188,10 +1251,10 @@ export default function EstimatorPage() {
 
               <Separator className="my-2" />
               <GroupLabel>Other</GroupLabel>
-              <ARow label="Flintlastic" qty={String(roundUp(num(flintlasticQty)))} setQty={setFlintlasticQty} unit="SQ" price={String(FLINTLASTIC_PRICE)} setPrice={() => {}} total={flintlasticTotal} readonlyPrice />
+              <MLRow label="Flintlastic" qty={String(roundUp(num(flintlasticQty)))} setQty={setFlintlasticQty} unit="SQ" materialPrice={flintlasticMaterialPrice} setMaterialPrice={setFlintlasticMaterialPrice} laborPrice={flintlasticPrice} setLaborPrice={setFlintlasticPrice} total={flintlasticTotal} />
               {/* Decking with thickness + type selectors */}
-              <div className="grid grid-cols-12 gap-2 items-center mb-1">
-                <div className="col-span-4 text-sm font-medium flex items-center gap-1 flex-wrap">
+              <MLRow
+                label={<>
                   <span>Decking</span>
                   <Select value={deckingThickness} onValueChange={setDeckingThickness}>
                     <SelectTrigger className="text-xs h-6 px-2 w-20 border-dashed"><SelectValue /></SelectTrigger>
@@ -1201,12 +1264,11 @@ export default function EstimatorPage() {
                     <SelectTrigger className="text-xs h-6 px-2 w-20 border-dashed"><SelectValue /></SelectTrigger>
                     <SelectContent>{DECKING_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                   </Select>
-                </div>
-                <div className="col-span-2"><Input type="number" min="0" value={deckingQty} onChange={e => setDeckingQty(e.target.value)} placeholder="0" className="text-sm h-8" /></div>
-                <div className="col-span-1 text-xs text-center text-muted-foreground">Sheet</div>
-                <div className="col-span-2"><Input type="number" min="0" step="0.01" value={deckingPrice} onChange={e => setDeckingPrice(e.target.value)} placeholder="0.00" className="text-sm h-8" /></div>
-                <div className="col-span-3 text-right text-sm font-semibold">{fmt(deckingTotal)}</div>
-              </div>
+                </>}
+                qty={deckingQty} setQty={setDeckingQty} unit="Sheet"
+                materialPrice={deckingMaterialPrice} setMaterialPrice={setDeckingMaterialPrice}
+                laborPrice={deckingPrice} setLaborPrice={setDeckingPrice} total={deckingTotal}
+              />
 
               {/* Referral Fee — admin view */}
               <Separator className="my-2" />
@@ -1259,6 +1321,23 @@ export default function EstimatorPage() {
                     className="text-sm w-24 h-8"
                   />
                   <span className="text-sm text-muted-foreground">% &nbsp;(default 40%)</span>
+                </div>
+              </div>
+
+              {/* Material Tax rate input — applied to every Material $/unit above */}
+              <div className="mb-3">
+                <Label className="text-xs mb-1 block">Material Tax %</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={materialTaxRateInput}
+                    onChange={e => setMaterialTaxRateInput(e.target.value)}
+                    className="text-sm w-24 h-8"
+                  />
+                  <span className="text-sm text-muted-foreground">% &nbsp;(applied to Material $/unit only, not Labor)</span>
                 </div>
               </div>
 
@@ -1339,11 +1418,10 @@ export default function EstimatorPage() {
 function ColHeaders() {
   return (
     <div className="grid grid-cols-12 gap-2 mb-2 text-xs font-semibold text-muted-foreground border-b border-border pb-2">
-      <div className="col-span-4">Item</div>
-      <div className="col-span-2 text-center">Qty</div>
+      <div className="col-span-6">Item</div>
+      <div className="col-span-3 text-center">Qty</div>
       <div className="col-span-1 text-center">Unit</div>
-      <div className="col-span-2 text-center">$/Unit</div>
-      <div className="col-span-3 text-right">Raw Cost</div>
+      <div className="col-span-2 text-right">Raw Cost</div>
     </div>
   );
 }
@@ -1415,6 +1493,52 @@ function ARow({ label, qty, setQty, unit, price, setPrice, total, readonlyQty, r
           placeholder="0.00" className={`text-sm h-8 ${readonlyPrice ? "bg-muted" : ""}`} readOnly={readonlyPrice} />
       </div>
       <div className="col-span-3 text-right text-sm font-semibold">{fmt(total)}</div>
+    </div>
+  );
+}
+
+interface MLRowProps {
+  label: React.ReactNode;
+  qty: string;
+  setQty: (v: string) => void;
+  unit: string;
+  materialPrice: string;
+  setMaterialPrice: (v: string) => void;
+  laborPrice: string;
+  setLaborPrice: (v: string) => void;
+  total: number;
+  readonlyQty?: boolean;
+  prefilled?: boolean;
+}
+
+// Material/Labor row — same as ARow but splits $/Unit into an editable
+// Material price (taxed by the estimate's Material Tax %) and Labor price.
+function MLRow({ label, qty, setQty, unit, materialPrice, setMaterialPrice, laborPrice, setLaborPrice, total, readonlyQty, prefilled }: MLRowProps) {
+  const hasVal = num(qty) > 0;
+  return (
+    <div className="mb-2 pb-2 border-b border-dashed border-border/60 last:border-0 last:mb-1 last:pb-0">
+      <div className="grid grid-cols-12 gap-2 items-center">
+        <div className="col-span-6 text-sm font-medium flex items-center gap-1 flex-wrap">
+          {label}
+          {prefilled && hasVal && <span className="text-xs text-muted-foreground">(auto)</span>}
+        </div>
+        <div className="col-span-3">
+          <Input type="number" min="0" step="0.1" value={qty} onChange={e => !readonlyQty && setQty(e.target.value)}
+            placeholder="0" className={`text-sm h-8 ${readonlyQty ? "bg-muted" : ""}`} readOnly={readonlyQty} />
+        </div>
+        <div className="col-span-1 text-xs text-center text-muted-foreground">{unit}</div>
+        <div className="col-span-2 text-right text-sm font-semibold">{fmt(total)}</div>
+      </div>
+      <div className="flex items-center gap-3 mt-1">
+        <div className="flex items-center gap-1 flex-1 min-w-0">
+          <span className="text-xs text-muted-foreground shrink-0">Material</span>
+          <Input type="number" min="0" step="0.01" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder="0.00" className="text-sm h-7" />
+        </div>
+        <div className="flex items-center gap-1 flex-1 min-w-0">
+          <span className="text-xs text-muted-foreground shrink-0">Labor</span>
+          <Input type="number" min="0" step="0.01" value={laborPrice} onChange={e => setLaborPrice(e.target.value)} placeholder="0.00" className="text-sm h-7" />
+        </div>
+      </div>
     </div>
   );
 }

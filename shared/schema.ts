@@ -35,6 +35,8 @@ export const estimates = sqliteTable("estimates", {
   wastePercent: real("waste_percent").default(15),
   totalSquares: real("total_squares"),
   totalSquaresWithWaste: real("total_squares_with_waste"),
+  // Material Tax % — applied to every material price below (labor is untaxed)
+  materialTaxRate: real("material_tax_rate").default(0),
   // Layers to Remove (tear-off surcharge: $30/SQ per layer above 1)
   layersToRemove: real("layers_to_remove").default(1),
   layersQty: real("layers_qty"),
@@ -43,33 +45,42 @@ export const estimates = sqliteTable("estimates", {
   shingleType: text("shingle_type"),
   shingleColor: text("shingle_color"),
   shingleQty: real("shingle_qty"),
-  shinglePricePerSq: real("shingle_price_per_sq"),
+  shinglePricePerSq: real("shingle_price_per_sq"), // labor $/unit
+  shingleMaterialPricePerSq: real("shingle_material_price_per_sq"),
   landmarkProUpcharge: real("landmark_pro_upcharge"),
   // Synthetic Underlayment
   underlaymentQty: real("underlayment_qty"),
-  underlaymentPricePerSq: real("underlayment_price_per_sq"),
+  underlaymentPricePerSq: real("underlayment_price_per_sq"), // labor $/unit
+  underlaymentMaterialPricePerSq: real("underlayment_material_price_per_sq"),
   // Starter Strip
   starterQty: real("starter_qty"),
-  starterPricePerUnit: real("starter_price_per_unit"),
+  starterPricePerUnit: real("starter_price_per_unit"), // labor $/unit
+  starterMaterialPricePerUnit: real("starter_material_price_per_unit"),
   // Ridge Cap (hip & ridge removed)
   ridgeCapQty: real("ridge_cap_qty"),
-  ridgeCapPricePerUnit: real("ridge_cap_price_per_unit"),
+  ridgeCapPricePerUnit: real("ridge_cap_price_per_unit"), // labor $/unit
+  ridgeCapMaterialPricePerUnit: real("ridge_cap_material_price_per_unit"),
   // Ice & Water Shield
   iceWaterQty: real("ice_water_qty"),
-  iceWaterPricePerUnit: real("ice_water_price_per_unit"),
+  iceWaterPricePerUnit: real("ice_water_price_per_unit"), // labor $/unit
+  iceWaterMaterialPricePerUnit: real("ice_water_material_price_per_unit"),
   // Drip Edge
   dripEdgeQty: real("drip_edge_qty"),
   dripEdgeColor: text("drip_edge_color"),
-  dripEdgePricePerUnit: real("drip_edge_price_per_unit"),
+  dripEdgePricePerUnit: real("drip_edge_price_per_unit"), // labor $/unit
+  dripEdgeMaterialPricePerUnit: real("drip_edge_material_price_per_unit"),
   // Aluminum Step Flashing
   stepFlashingQty: real("step_flashing_qty"),
-  stepFlashingPricePerUnit: real("step_flashing_price_per_unit"),
+  stepFlashingPricePerUnit: real("step_flashing_price_per_unit"), // labor $/unit
+  stepFlashingMaterialPricePerUnit: real("step_flashing_material_price_per_unit"),
   // Trim Coil
   trimCoilQty: real("trim_coil_qty"),
-  trimCoilPricePerUnit: real("trim_coil_price_per_unit"),
+  trimCoilPricePerUnit: real("trim_coil_price_per_unit"), // labor $/unit
+  trimCoilMaterialPricePerUnit: real("trim_coil_material_price_per_unit"),
   // Pipe Boots
   pipeBootsQty: real("pipe_boots_qty"),
-  pipeBootsPricePerUnit: real("pipe_boots_price_per_unit"),
+  pipeBootsPricePerUnit: real("pipe_boots_price_per_unit"), // labor $/unit
+  pipeBootsMaterialPricePerUnit: real("pipe_boots_material_price_per_unit"),
   // Bay Windows / Dormers (retired — kept for old estimates, no longer editable in the UI)
   bayWindowsQty: real("bay_windows_qty"),
   bayWindowsPricePerUnit: real("bay_windows_price_per_unit"),
@@ -82,21 +93,30 @@ export const estimates = sqliteTable("estimates", {
   chimneysJson: text("chimneys_json"),
   // Stationary Vents (750/Turtle Vents)
   stationaryVentsQty: real("stationary_vents_qty"),
-  stationaryVentsPricePerUnit: real("stationary_vents_price_per_unit"),
+  stationaryVentsPricePerUnit: real("stationary_vents_price_per_unit"), // labor $/unit
+  stationaryVentsMaterialPricePerUnit: real("stationary_vents_material_price_per_unit"),
   // Power Vents
   powerVentsQty: real("power_vents_qty"),
-  powerVentsPricePerUnit: real("power_vents_price_per_unit"),
+  powerVentsPricePerUnit: real("power_vents_price_per_unit"), // labor $/unit
+  powerVentsMaterialPricePerUnit: real("power_vents_material_price_per_unit"),
   // Solar Vents
   solarVentsQty: real("solar_vents_qty"),
-  solarVentsPricePerUnit: real("solar_vents_price_per_unit"),
+  solarVentsPricePerUnit: real("solar_vents_price_per_unit"), // labor $/unit
+  solarVentsMaterialPricePerUnit: real("solar_vents_material_price_per_unit"),
   // Skylights — stored as JSON array of skylight line items
   skylightsJson: text("skylights_json"),
-  // Ventilation
+  // Ventilation (Ridge Vent)
   ventilationQty: real("ventilation_qty"),
-  ventilationPricePerUnit: real("ventilation_price_per_unit"),
+  ventilationPricePerUnit: real("ventilation_price_per_unit"), // labor $/unit
+  ventilationMaterialPricePerUnit: real("ventilation_material_price_per_unit"),
   // Decking
   deckingQty: real("decking_qty"),
-  deckingPricePerUnit: real("decking_price_per_unit"),
+  deckingPricePerUnit: real("decking_price_per_unit"), // labor $/unit
+  deckingMaterialPricePerUnit: real("decking_material_price_per_unit"),
+  // Flintlastic
+  flintlasticQty: real("flintlastic_qty"),
+  flintlasticPricePerUnit: real("flintlastic_price_per_unit"), // labor $/unit
+  flintlasticMaterialPricePerUnit: real("flintlastic_material_price_per_unit"),
   // Labor
   laborQty: real("labor_qty"),
   laborPricePerUnit: real("labor_price_per_unit"),
@@ -135,6 +155,7 @@ export interface ChimneyItem {
   id: string;
   size: "small" | "average" | "large";
   qty: number;
-  pricePerUnit: number;  // derived from size: small=$200, average=$300, large=$400
-  lineTotal: number;     // pricePerUnit * qty
+  pricePerUnit: number;          // labor $/unit — derived from size by default: small=$200, average=$300, large=$400
+  materialPricePerUnit: number;  // material $/unit (taxed by the estimate's material tax rate)
+  lineTotal: number;             // qty * (materialPricePerUnit * (1 + taxRate) + pricePerUnit)
 }

@@ -109,6 +109,24 @@ _addCol("chimney_qty", "REAL");
 _addCol("chimney_size", "TEXT");
 _addCol("chimney_price_per_unit", "REAL");
 _addCol("chimneys_json", "TEXT");
+_addCol("flintlastic_qty", "REAL");
+_addCol("flintlastic_price_per_unit", "REAL");
+_addCol("material_tax_rate", "REAL DEFAULT 0");
+_addCol("shingle_material_price_per_sq", "REAL");
+_addCol("underlayment_material_price_per_sq", "REAL");
+_addCol("starter_material_price_per_unit", "REAL");
+_addCol("ridge_cap_material_price_per_unit", "REAL");
+_addCol("ice_water_material_price_per_unit", "REAL");
+_addCol("drip_edge_material_price_per_unit", "REAL");
+_addCol("step_flashing_material_price_per_unit", "REAL");
+_addCol("trim_coil_material_price_per_unit", "REAL");
+_addCol("pipe_boots_material_price_per_unit", "REAL");
+_addCol("stationary_vents_material_price_per_unit", "REAL");
+_addCol("power_vents_material_price_per_unit", "REAL");
+_addCol("solar_vents_material_price_per_unit", "REAL");
+_addCol("ventilation_material_price_per_unit", "REAL");
+_addCol("decking_material_price_per_unit", "REAL");
+_addCol("flintlastic_material_price_per_unit", "REAL");
 
 // ─── Seed / secure default admin account ───────────────────────────────────────
 // Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a
