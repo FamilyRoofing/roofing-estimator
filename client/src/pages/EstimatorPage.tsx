@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ChevronLeft, Save, Eye, EyeOff, Plus, Trash2, Printer } from "lucide-react";
-import type { Estimate, SkylightItem } from "@shared/schema";
+import type { Estimate, SkylightItem, ChimneyItem } from "@shared/schema";
 import { ALL_VELUX_MODELS, SKYLIGHT_INSTALL_COST, SKYLIGHT_FLASHING_COST } from "@/lib/velux";
 
 // ─── Pricing model ────────────────────────────────────────────────────────────
@@ -155,6 +155,20 @@ function buildSkylightItem(overrides: Partial<SkylightItem> = {}): SkylightItem 
   };
 }
 
+function buildChimneyItem(overrides: Partial<ChimneyItem> = {}): ChimneyItem {
+  const size = overrides.size ?? "small";
+  const qty = overrides.qty ?? 1;
+  const pricePerUnit = CHIMNEY_PRICES[size];
+  return {
+    id: uid(),
+    size,
+    qty,
+    pricePerUnit,
+    lineTotal: pricePerUnit * qty,
+    ...overrides,
+  };
+}
+
 export default function EstimatorPage() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -228,8 +242,8 @@ export default function EstimatorPage() {
   const [pipeBootsQty, setPipeBootsQty] = useState("");
   const [pipeBootsPrice, setPipeBootsPrice] = useState(String(D.pipeBoot));
 
-  const [chimneyQty, setChimneyQty] = useState("");
-  const [chimneySize, setChimneySize] = useState<"small" | "average" | "large">("small");
+  // Chimneys — dynamic array, same pattern as skylights
+  const [chimneys, setChimneys] = useState<ChimneyItem[]>([]);
 
   const [stationaryVentsQty, setStationaryVentsQty] = useState("");
   const [stationaryVentsPrice, setStationaryVentsPrice] = useState("24");
@@ -293,8 +307,7 @@ export default function EstimatorPage() {
   const stepFlashTotal    = num(stepFlashingQty) * num(stepFlashingPrice);
   const trimCoilTotal     = num(trimCoilQty) * num(trimCoilPrice);
   const pipeBootsTotal    = num(pipeBootsQty) * num(pipeBootsPrice);
-  const chimneyPrice      = CHIMNEY_PRICES[chimneySize];
-  const chimneyTotal      = num(chimneyQty) * chimneyPrice;
+  const chimneysTotal     = chimneys.reduce((s, c) => s + c.lineTotal, 0);
   const stationaryVentsTotal = num(stationaryVentsQty) * num(stationaryVentsPrice);
   const powerVentsTotal   = num(powerVentsQty) * num(powerVentsPrice);
   const solarVentsTotal   = num(solarVentsQty) * num(solarVentsPrice);
@@ -319,7 +332,7 @@ export default function EstimatorPage() {
   // ─── Markup model ─────────────────────────────────────────────────────────
   const A = shingleTotal + landmarkProTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
     ridgeCapTotal + iceWaterTotal + dripEdgeTotal + stepFlashTotal +
-    trimCoilTotal + pipeBootsTotal + chimneyTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
+    trimCoilTotal + pipeBootsTotal + chimneysTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
     ridgeVentTotal + deckingTotal + flintlasticTotal + layersTotal + referralFee + MISC_AMOUNT;
   const B = A * markupRate;
   const E = A + B;
@@ -391,6 +404,21 @@ export default function EstimatorPage() {
 
   const removeSkylight = (id: string) => setSkylights(prev => prev.filter(sk => sk.id !== id));
 
+  // ─── Chimney helpers ──────────────────────────────────────────────────────
+  const addChimney = () => setChimneys(prev => [...prev, buildChimneyItem()]);
+
+  const updateChimney = (id: string, changes: Partial<ChimneyItem>) => {
+    setChimneys(prev => prev.map(c => {
+      if (c.id !== id) return c;
+      const updated = { ...c, ...changes };
+      updated.pricePerUnit = CHIMNEY_PRICES[updated.size];
+      updated.lineTotal = updated.pricePerUnit * (updated.qty ?? 1);
+      return updated;
+    }));
+  };
+
+  const removeChimney = (id: string) => setChimneys(prev => prev.filter(c => c.id !== id));
+
   // ─── Load existing estimate ───────────────────────────────────────────────
   const { data: existingEstimate } = useQuery<Estimate>({
     queryKey: ["/api/estimates", params.id],
@@ -422,8 +450,15 @@ export default function EstimatorPage() {
     setTrimCoilPrice(String(existingEstimate.trimCoilPricePerUnit ?? D.trimCoil));
     setPipeBootsQty(String(existingEstimate.pipeBootsQty ?? ""));
     setPipeBootsPrice(String(existingEstimate.pipeBootsPricePerUnit ?? D.pipeBoot));
-    setChimneyQty(String(existingEstimate.chimneyQty ?? ""));
-    setChimneySize((existingEstimate.chimneySize as "small" | "average" | "large") || "small");
+    if (existingEstimate.chimneysJson) {
+      try { setChimneys(JSON.parse(existingEstimate.chimneysJson)); } catch {}
+    } else if (existingEstimate.chimneyQty) {
+      // Migrate old single-item chimney estimates into the new array format
+      setChimneys([buildChimneyItem({
+        size: (existingEstimate.chimneySize as "small" | "average" | "large") || "small",
+        qty: existingEstimate.chimneyQty,
+      })]);
+    }
     setStationaryVentsQty(String(existingEstimate.stationaryVentsQty ?? ""));
     setStationaryVentsPrice(String(existingEstimate.stationaryVentsPricePerUnit ?? 24));
     setPowerVentsQty(String(existingEstimate.powerVentsQty ?? ""));
@@ -489,9 +524,7 @@ export default function EstimatorPage() {
     trimCoilPricePerUnit: num(trimCoilPrice),
     pipeBootsQty: num(pipeBootsQty) || null,
     pipeBootsPricePerUnit: num(pipeBootsPrice),
-    chimneyQty: num(chimneyQty) || null,
-    chimneySize,
-    chimneyPricePerUnit: chimneyPrice,
+    chimneysJson: chimneys.length ? JSON.stringify(chimneys) : null,
     stationaryVentsQty: num(stationaryVentsQty) || null,
     stationaryVentsPricePerUnit: num(stationaryVentsPrice),
     powerVentsQty: num(powerVentsQty) || null,
@@ -693,19 +726,32 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <SalesGroupLabel>Openings & Penetrations</SalesGroupLabel>
               <SalesQtyRow label="Pipe Boots" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" />
-              <div className="grid grid-cols-12 gap-2 items-center mb-1">
-                <div className="col-span-7 text-sm font-medium flex items-center gap-1 flex-wrap">
-                  <span>Chimney</span>
-                  <Select value={chimneySize} onValueChange={v => setChimneySize(v as "small" | "average" | "large")}>
-                    <SelectTrigger className="text-xs h-6 px-2 w-36 border-dashed"><SelectValue /></SelectTrigger>
-                    <SelectContent>{CHIMNEY_SIZES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-3">
-                  <Input type="number" min="0" value={chimneyQty} onChange={e => setChimneyQty(e.target.value)} placeholder="0" className="text-sm h-8" />
-                </div>
-                <div className="col-span-2 text-xs text-center text-muted-foreground">EA</div>
+              <div className="flex items-center justify-between mb-1 mt-1">
+                <span className="text-xs font-semibold text-muted-foreground">Chimneys</span>
+                <Button variant="outline" size="sm" onClick={addChimney} className="gap-1 text-xs h-7 print:hidden">
+                  <Plus size={12} /> Add Chimney
+                </Button>
               </div>
+              {chimneys.length === 0 && (
+                <p className="text-xs text-muted-foreground mb-2 italic">No chimneys added.</p>
+              )}
+              {chimneys.map((c) => (
+                <div key={c.id} className="grid grid-cols-12 gap-2 items-center mb-1">
+                  <div className="col-span-7">
+                    <Select value={c.size} onValueChange={v => updateChimney(c.id, { size: v as "small" | "average" | "large" })}>
+                      <SelectTrigger className="text-xs h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>{CHIMNEY_SIZES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-3">
+                    <Input type="number" min="1" value={c.qty} onChange={e => updateChimney(c.id, { qty: num(e.target.value) })} placeholder="Qty" className="text-sm h-8" />
+                  </div>
+                  <div className="col-span-1 text-xs text-center text-muted-foreground">EA</div>
+                  <div className="col-span-1 flex justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => removeChimney(c.id)} className="h-7 w-7 p-0 text-destructive print:hidden"><Trash2 size={13} /></Button>
+                  </div>
+                </div>
+              ))}
 
               <Separator className="my-2" />
               <SalesGroupLabel>Ventilation</SalesGroupLabel>
@@ -1046,19 +1092,32 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <GroupLabel>Openings & Penetrations</GroupLabel>
               <ARow label="Pipe Boots" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" price={pipeBootsPrice} setPrice={setPipeBootsPrice} total={pipeBootsTotal} />
-              <div className="grid grid-cols-12 gap-2 items-center mb-1">
-                <div className="col-span-4 text-sm font-medium flex items-center gap-1 flex-wrap">
-                  <span>Chimney</span>
-                  <Select value={chimneySize} onValueChange={v => setChimneySize(v as "small" | "average" | "large")}>
-                    <SelectTrigger className="text-xs h-6 px-2 w-36 border-dashed"><SelectValue /></SelectTrigger>
-                    <SelectContent>{CHIMNEY_SIZES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-2"><Input type="number" min="0" value={chimneyQty} onChange={e => setChimneyQty(e.target.value)} placeholder="0" className="text-sm h-8" /></div>
-                <div className="col-span-1 text-xs text-center text-muted-foreground">EA</div>
-                <div className="col-span-2"><Input type="number" min="0" step="0.01" value={chimneyPrice.toFixed(2)} readOnly className="text-sm h-8 bg-muted" /></div>
-                <div className="col-span-3 text-right text-sm font-semibold">{fmt(chimneyTotal)}</div>
+              <div className="flex items-center justify-between mb-1 mt-1">
+                <span className="text-xs font-semibold text-muted-foreground">Chimneys</span>
+                <Button variant="outline" size="sm" onClick={addChimney} className="gap-1 text-xs h-7 print:hidden">
+                  <Plus size={12} /> Add Chimney
+                </Button>
               </div>
+              {chimneys.length === 0 && (
+                <p className="text-xs text-muted-foreground mb-2 italic">No chimneys added.</p>
+              )}
+              {chimneys.map((c) => (
+                <div key={c.id} className="grid grid-cols-12 gap-2 items-center mb-1">
+                  <div className="col-span-4">
+                    <Select value={c.size} onValueChange={v => updateChimney(c.id, { size: v as "small" | "average" | "large" })}>
+                      <SelectTrigger className="text-xs h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>{CHIMNEY_SIZES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2"><Input type="number" min="1" value={c.qty} onChange={e => updateChimney(c.id, { qty: num(e.target.value) })} placeholder="Qty" className="text-sm h-8" /></div>
+                  <div className="col-span-1 text-xs text-center text-muted-foreground">EA</div>
+                  <div className="col-span-2"><Input type="number" value={c.pricePerUnit.toFixed(2)} readOnly className="text-sm h-8 bg-muted" /></div>
+                  <div className="col-span-2 text-right text-sm font-semibold">{fmt(c.lineTotal)}</div>
+                  <div className="col-span-1 flex justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => removeChimney(c.id)} className="h-7 w-7 p-0 text-destructive print:hidden"><Trash2 size={13} /></Button>
+                  </div>
+                </div>
+              ))}
 
               <Separator className="my-2" />
               <GroupLabel>Ventilation</GroupLabel>

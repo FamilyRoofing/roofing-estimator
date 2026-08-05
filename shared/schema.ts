@@ -73,10 +73,13 @@ export const estimates = sqliteTable("estimates", {
   // Bay Windows / Dormers (retired — kept for old estimates, no longer editable in the UI)
   bayWindowsQty: real("bay_windows_qty"),
   bayWindowsPricePerUnit: real("bay_windows_price_per_unit"),
-  // Chimney — size determines unit price (small=$200, average=$300, large=$400)
+  // Chimney (retired single-item fields — kept for old estimates)
   chimneyQty: real("chimney_qty"),
   chimneySize: text("chimney_size"), // "small" | "average" | "large"
   chimneyPricePerUnit: real("chimney_price_per_unit"),
+  // Chimneys — stored as JSON array of chimney line items (size determines
+  // unit price: small=$200, average=$300, large=$400)
+  chimneysJson: text("chimneys_json"),
   // Stationary Vents (750/Turtle Vents)
   stationaryVentsQty: real("stationary_vents_qty"),
   stationaryVentsPricePerUnit: real("stationary_vents_price_per_unit"),
@@ -125,4 +128,13 @@ export interface SkylightItem {
   flashingPrice: number;  // $140 for deck, $0 for curb/custom
   totalPerUnit: number;   // material + install + flashing
   lineTotal: number;      // totalPerUnit * qty
+}
+
+// Chimney line item type (stored as JSON in chimneysJson)
+export interface ChimneyItem {
+  id: string;
+  size: "small" | "average" | "large";
+  qty: number;
+  pricePerUnit: number;  // derived from size: small=$200, average=$300, large=$400
+  lineTotal: number;     // pricePerUnit * qty
 }
