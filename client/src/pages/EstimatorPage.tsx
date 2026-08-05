@@ -339,6 +339,13 @@ export default function EstimatorPage() {
   // Commission is X% of Total Price: Total = E / (1 - rate), F = Total * rate
   const grandTotal = E / (1 - commissionRate);
   const F = grandTotal * commissionRate;
+  // Margin = Total Price − material/overhead costs − commission (this app has
+  // no separate labor line, so "cost" here is A, the same raw-costs figure
+  // shown above). Algebraically this always equals B, the markup dollar
+  // amount — shown as its own line since "% of Total Price" is a more useful
+  // read than "% of cost" for a margin check.
+  const marginDollar = grandTotal - A - F;
+  const marginPercent = grandTotal > 0 ? (marginDollar / grandTotal) * 100 : 0;
   // Price per SQ denominator includes starter & hip & ridge bundles (3 bundles = 1 SQ)
   const starterBundles  = roundUp(num(starterQty) / ST_BUNDLE_LF);
   const hipRidgeBundles = roundUp(num(ridgeCapQty) / HR_BUNDLE_LF);
@@ -411,7 +418,11 @@ export default function EstimatorPage() {
     setChimneys(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...changes };
-      updated.pricePerUnit = CHIMNEY_PRICES[updated.size];
+      // Changing size resets to that size's default price; editing price
+      // directly (or just changing qty) leaves the current price alone.
+      if (changes.size !== undefined && changes.pricePerUnit === undefined) {
+        updated.pricePerUnit = CHIMNEY_PRICES[changes.size];
+      }
       updated.lineTotal = updated.pricePerUnit * (updated.qty ?? 1);
       return updated;
     }));
@@ -725,7 +736,7 @@ export default function EstimatorPage() {
 
               <Separator className="my-2" />
               <SalesGroupLabel>Openings & Penetrations</SalesGroupLabel>
-              <SalesQtyRow label="Pipe Boots" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" />
+              <SalesQtyRow label="Pipe Boots (incl Rain Collars)" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" />
               <div className="flex items-center justify-between mb-1 mt-1">
                 <span className="text-xs font-semibold text-muted-foreground">Chimneys</span>
                 <Button variant="outline" size="sm" onClick={addChimney} className="gap-1 text-xs h-7 print:hidden">
@@ -1091,7 +1102,7 @@ export default function EstimatorPage() {
 
               <Separator className="my-2" />
               <GroupLabel>Openings & Penetrations</GroupLabel>
-              <ARow label="Pipe Boots" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" price={pipeBootsPrice} setPrice={setPipeBootsPrice} total={pipeBootsTotal} />
+              <ARow label="Pipe Boots (incl Rain Collars)" qty={pipeBootsQty} setQty={setPipeBootsQty} unit="EA" price={pipeBootsPrice} setPrice={setPipeBootsPrice} total={pipeBootsTotal} />
               <div className="flex items-center justify-between mb-1 mt-1">
                 <span className="text-xs font-semibold text-muted-foreground">Chimneys</span>
                 <Button variant="outline" size="sm" onClick={addChimney} className="gap-1 text-xs h-7 print:hidden">
@@ -1111,7 +1122,7 @@ export default function EstimatorPage() {
                   </div>
                   <div className="col-span-2"><Input type="number" min="1" value={c.qty} onChange={e => updateChimney(c.id, { qty: num(e.target.value) })} placeholder="Qty" className="text-sm h-8" /></div>
                   <div className="col-span-1 text-xs text-center text-muted-foreground">EA</div>
-                  <div className="col-span-2"><Input type="number" value={c.pricePerUnit.toFixed(2)} readOnly className="text-sm h-8 bg-muted" /></div>
+                  <div className="col-span-2"><Input type="number" min="0" step="0.01" value={c.pricePerUnit} onChange={e => updateChimney(c.id, { pricePerUnit: num(e.target.value) })} className="text-sm h-8" /></div>
                   <div className="col-span-2 text-right text-sm font-semibold">{fmt(c.lineTotal)}</div>
                   <div className="col-span-1 flex justify-end">
                     <Button variant="ghost" size="sm" onClick={() => removeChimney(c.id)} className="h-7 w-7 p-0 text-destructive print:hidden"><Trash2 size={13} /></Button>
@@ -1269,6 +1280,7 @@ export default function EstimatorPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">A — Total Raw Costs (incl. overhead)</span><span className="font-semibold">{fmtBig(A)}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">B — Markup (A × {(markupRate * 100).toFixed(0)}%)</span><span className="font-semibold">{fmtBig(B)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Margin (Total − Costs − Commission)</span><span className="font-semibold">{fmtBig(marginDollar)} <span className="text-muted-foreground font-normal">({marginPercent.toFixed(1)}% of Total)</span></span></div>
                 <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">E — Subtotal Before Commission (A + B)</span><span className="font-semibold">{fmtBig(E)}</span></div>
                 <Separator />
                 <div className="flex justify-between text-lg font-bold"><span>Total Price</span><span className="text-primary">{fmtBig(grandTotal)}</span></div>
