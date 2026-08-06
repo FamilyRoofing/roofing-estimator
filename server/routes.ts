@@ -24,6 +24,48 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Pull the material/labor price fields out of a saved estimate (plus its
+// chimneys) so they can be upserted into the shared price_defaults book.
+const PRICE_DEFAULT_KEYS = [
+  "shinglePricePerSq", "shingleMaterialPricePerSq",
+  "underlaymentPricePerSq", "underlaymentMaterialPricePerSq",
+  "starterPricePerUnit", "starterMaterialPricePerUnit",
+  "ridgeCapPricePerUnit", "ridgeCapMaterialPricePerUnit",
+  "iceWaterPricePerUnit", "iceWaterMaterialPricePerUnit",
+  "dripEdgePricePerUnit", "dripEdgeMaterialPricePerUnit",
+  "stepFlashingPricePerUnit", "stepFlashingMaterialPricePerUnit",
+  "trimCoilPricePerUnit", "trimCoilMaterialPricePerUnit",
+  "pipeBootsPricePerUnit", "pipeBootsMaterialPricePerUnit",
+  "stationaryVentsPricePerUnit", "stationaryVentsMaterialPricePerUnit",
+  "powerVentsPricePerUnit", "powerVentsMaterialPricePerUnit",
+  "solarVentsPricePerUnit", "solarVentsMaterialPricePerUnit",
+  "ventilationPricePerUnit", "ventilationMaterialPricePerUnit",
+  "deckingPricePerUnit", "deckingMaterialPricePerUnit",
+  "flintlasticPricePerUnit", "flintlasticMaterialPricePerUnit",
+] as const;
+
+function extractPriceDefaults(data: Record<string, unknown>) {
+  const out: Record<string, number> = {};
+  for (const key of PRICE_DEFAULT_KEYS) {
+    if (typeof data[key] === "number") out[key] = data[key] as number;
+  }
+  if (typeof data.chimneysJson === "string") {
+    try {
+      const chimneys = JSON.parse(data.chimneysJson) as {
+        size: "small" | "average" | "large";
+        pricePerUnit: number;
+        materialPricePerUnit?: number;
+      }[];
+      for (const c of chimneys) {
+        if (c.size !== "small" && c.size !== "average" && c.size !== "large") continue;
+        out[`chimney${c.size[0].toUpperCase()}${c.size.slice(1)}PricePerUnit`] = c.pricePerUnit;
+        out[`chimney${c.size[0].toUpperCase()}${c.size.slice(1)}MaterialPricePerUnit`] = c.materialPricePerUnit ?? 0;
+      }
+    } catch {}
+  }
+  return out;
+}
+
 export function registerRoutes(httpServer: Server, app: Express) {
 
   // ── Auth ───────────────────────────────────────────────────────────────────
@@ -142,6 +184,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       }
       const data = { ...parsed.data, userId: req.session.userId! };
       const created = storage.createEstimate(data);
+      storage.savePriceDefaults(extractPriceDefaults(data));
       res.status(201).json(created);
     } catch (err) {
       res.status(500).json({ error: "Failed to create estimate" });
@@ -164,6 +207,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       }
       const updated = storage.updateEstimate(id, parsed.data);
       if (!updated) return res.status(404).json({ error: "Not found" });
+      storage.savePriceDefaults(extractPriceDefaults(parsed.data));
       res.json(updated);
     } catch (err) {
       res.status(500).json({ error: "Failed to update estimate" });
@@ -184,6 +228,18 @@ export function registerRoutes(httpServer: Server, app: Express) {
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: "Failed to delete estimate" });
+    }
+  });
+
+  // ── Price Defaults (shared price book — updated automatically on every
+  //    estimate save so new estimates start from the latest numbers) ─────────
+
+  // GET current price defaults
+  app.get("/api/price-defaults", requireAuth, (_req, res) => {
+    try {
+      res.json(storage.getPriceDefaults() ?? {});
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch price defaults" });
     }
   });
 }

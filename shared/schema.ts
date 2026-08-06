@@ -136,6 +136,55 @@ export const insertEstimateSchema = createInsertSchema(estimates).omit({ id: tru
 export type InsertEstimate = z.infer<typeof insertEstimateSchema>;
 export type Estimate = typeof estimates.$inferSelect;
 
+// ─── Price Defaults ────────────────────────────────────────────────────────────
+// Singleton "price book" (always row id=1). Every estimate save updates these
+// from whatever material/labor prices were used, so future new estimates
+// start from the most recently saved numbers instead of the hardcoded ones.
+export const priceDefaults = sqliteTable("price_defaults", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  shinglePricePerSq: real("shingle_price_per_sq"),
+  shingleMaterialPricePerSq: real("shingle_material_price_per_sq"),
+  underlaymentPricePerSq: real("underlayment_price_per_sq"),
+  underlaymentMaterialPricePerSq: real("underlayment_material_price_per_sq"),
+  starterPricePerUnit: real("starter_price_per_unit"),
+  starterMaterialPricePerUnit: real("starter_material_price_per_unit"),
+  ridgeCapPricePerUnit: real("ridge_cap_price_per_unit"),
+  ridgeCapMaterialPricePerUnit: real("ridge_cap_material_price_per_unit"),
+  iceWaterPricePerUnit: real("ice_water_price_per_unit"),
+  iceWaterMaterialPricePerUnit: real("ice_water_material_price_per_unit"),
+  dripEdgePricePerUnit: real("drip_edge_price_per_unit"),
+  dripEdgeMaterialPricePerUnit: real("drip_edge_material_price_per_unit"),
+  stepFlashingPricePerUnit: real("step_flashing_price_per_unit"),
+  stepFlashingMaterialPricePerUnit: real("step_flashing_material_price_per_unit"),
+  trimCoilPricePerUnit: real("trim_coil_price_per_unit"),
+  trimCoilMaterialPricePerUnit: real("trim_coil_material_price_per_unit"),
+  pipeBootsPricePerUnit: real("pipe_boots_price_per_unit"),
+  pipeBootsMaterialPricePerUnit: real("pipe_boots_material_price_per_unit"),
+  stationaryVentsPricePerUnit: real("stationary_vents_price_per_unit"),
+  stationaryVentsMaterialPricePerUnit: real("stationary_vents_material_price_per_unit"),
+  powerVentsPricePerUnit: real("power_vents_price_per_unit"),
+  powerVentsMaterialPricePerUnit: real("power_vents_material_price_per_unit"),
+  solarVentsPricePerUnit: real("solar_vents_price_per_unit"),
+  solarVentsMaterialPricePerUnit: real("solar_vents_material_price_per_unit"),
+  ventilationPricePerUnit: real("ventilation_price_per_unit"), // Ridge Vent
+  ventilationMaterialPricePerUnit: real("ventilation_material_price_per_unit"),
+  deckingPricePerUnit: real("decking_price_per_unit"),
+  deckingMaterialPricePerUnit: real("decking_material_price_per_unit"),
+  flintlasticPricePerUnit: real("flintlastic_price_per_unit"),
+  flintlasticMaterialPricePerUnit: real("flintlastic_material_price_per_unit"),
+  chimneySmallPricePerUnit: real("chimney_small_price_per_unit"),
+  chimneySmallMaterialPricePerUnit: real("chimney_small_material_price_per_unit"),
+  chimneyAveragePricePerUnit: real("chimney_average_price_per_unit"),
+  chimneyAverageMaterialPricePerUnit: real("chimney_average_material_price_per_unit"),
+  chimneyLargePricePerUnit: real("chimney_large_price_per_unit"),
+  chimneyLargeMaterialPricePerUnit: real("chimney_large_material_price_per_unit"),
+  updatedAt: text("updated_at"),
+});
+
+export const insertPriceDefaultsSchema = createInsertSchema(priceDefaults).omit({ id: true });
+export type InsertPriceDefaults = z.infer<typeof insertPriceDefaultsSchema>;
+export type PriceDefaults = typeof priceDefaults.$inferSelect;
+
 // Skylight line item type (stored as JSON in skylightsJson)
 export interface SkylightItem {
   id: string;

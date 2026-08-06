@@ -3,9 +3,9 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { estimates, users } from "@shared/schema";
+import { estimates, users, priceDefaults } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import type { InsertEstimate, Estimate, User } from "@shared/schema";
+import type { InsertEstimate, Estimate, User, InsertPriceDefaults, PriceDefaults } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
 // Use /data volume on Railway (persistent), fall back to local for dev
@@ -86,6 +86,49 @@ sqlite.exec(`
     total_with_misc REAL,
     notes TEXT,
     status TEXT DEFAULT 'draft'
+  )
+`);
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS price_defaults (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shingle_price_per_sq REAL,
+    shingle_material_price_per_sq REAL,
+    underlayment_price_per_sq REAL,
+    underlayment_material_price_per_sq REAL,
+    starter_price_per_unit REAL,
+    starter_material_price_per_unit REAL,
+    ridge_cap_price_per_unit REAL,
+    ridge_cap_material_price_per_unit REAL,
+    ice_water_price_per_unit REAL,
+    ice_water_material_price_per_unit REAL,
+    drip_edge_price_per_unit REAL,
+    drip_edge_material_price_per_unit REAL,
+    step_flashing_price_per_unit REAL,
+    step_flashing_material_price_per_unit REAL,
+    trim_coil_price_per_unit REAL,
+    trim_coil_material_price_per_unit REAL,
+    pipe_boots_price_per_unit REAL,
+    pipe_boots_material_price_per_unit REAL,
+    stationary_vents_price_per_unit REAL,
+    stationary_vents_material_price_per_unit REAL,
+    power_vents_price_per_unit REAL,
+    power_vents_material_price_per_unit REAL,
+    solar_vents_price_per_unit REAL,
+    solar_vents_material_price_per_unit REAL,
+    ventilation_price_per_unit REAL,
+    ventilation_material_price_per_unit REAL,
+    decking_price_per_unit REAL,
+    decking_material_price_per_unit REAL,
+    flintlastic_price_per_unit REAL,
+    flintlastic_material_price_per_unit REAL,
+    chimney_small_price_per_unit REAL,
+    chimney_small_material_price_per_unit REAL,
+    chimney_average_price_per_unit REAL,
+    chimney_average_material_price_per_unit REAL,
+    chimney_large_price_per_unit REAL,
+    chimney_large_material_price_per_unit REAL,
+    updated_at TEXT
   )
 `);
 
@@ -183,6 +226,10 @@ export interface IStorage {
   createEstimate(data: InsertEstimate): Estimate;
   updateEstimate(id: number, data: Partial<InsertEstimate>): Estimate | undefined;
   deleteEstimate(id: number): void;
+
+  // Price Defaults (shared price book)
+  getPriceDefaults(): PriceDefaults | undefined;
+  savePriceDefaults(data: Partial<InsertPriceDefaults>): PriceDefaults;
 }
 
 export class Storage implements IStorage {
@@ -230,6 +277,19 @@ export class Storage implements IStorage {
   }
   deleteEstimate(id: number): void {
     db.delete(estimates).where(eq(estimates.id, id)).run();
+  }
+
+  // ── Price Defaults ─────────────────────────────────────────────────────────
+  getPriceDefaults(): PriceDefaults | undefined {
+    return db.select().from(priceDefaults).where(eq(priceDefaults.id, 1)).get();
+  }
+  savePriceDefaults(data: Partial<InsertPriceDefaults>): PriceDefaults {
+    const existing = this.getPriceDefaults();
+    const payload = { ...data, updatedAt: new Date().toISOString() };
+    if (existing) {
+      return db.update(priceDefaults).set(payload).where(eq(priceDefaults.id, 1)).returning().get();
+    }
+    return db.insert(priceDefaults).values({ id: 1, ...payload }).returning().get();
   }
 }
 

@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ChevronLeft, Save, Eye, EyeOff, Plus, Trash2, Printer } from "lucide-react";
-import type { Estimate, SkylightItem, ChimneyItem } from "@shared/schema";
+import type { Estimate, SkylightItem, ChimneyItem, PriceDefaults } from "@shared/schema";
 import { ALL_VELUX_MODELS, SKYLIGHT_INSTALL_COST, SKYLIGHT_FLASHING_COST } from "@/lib/velux";
 
 // ─── Pricing model ────────────────────────────────────────────────────────────
@@ -417,16 +417,33 @@ export default function EstimatorPage() {
   const removeSkylight = (id: string) => setSkylights(prev => prev.filter(sk => sk.id !== id));
 
   // ─── Chimney helpers ──────────────────────────────────────────────────────
-  const addChimney = () => setChimneys(prev => [...prev, buildChimneyItem()]);
+  // Size defaults come from the shared price book when available, falling
+  // back to the hardcoded CHIMNEY_PRICES (labor only; material defaults $0).
+  const chimneyDefaultsFor = (size: "small" | "average" | "large") => {
+    const cap = size[0].toUpperCase() + size.slice(1);
+    const labor = (priceDefaults as any)?.[`chimney${cap}PricePerUnit`];
+    const material = (priceDefaults as any)?.[`chimney${cap}MaterialPricePerUnit`];
+    return {
+      labor: labor ?? CHIMNEY_PRICES[size],
+      material: material ?? 0,
+    };
+  };
+
+  const addChimney = () => {
+    const d = chimneyDefaultsFor("small");
+    setChimneys(prev => [...prev, buildChimneyItem({ size: "small", pricePerUnit: d.labor, materialPricePerUnit: d.material })]);
+  };
 
   const updateChimney = (id: string, changes: Partial<ChimneyItem>) => {
     setChimneys(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...changes };
-      // Changing size resets to that size's default labor price; editing
-      // price directly (or just changing qty) leaves the current price alone.
-      if (changes.size !== undefined && changes.pricePerUnit === undefined) {
-        updated.pricePerUnit = CHIMNEY_PRICES[changes.size];
+      // Changing size resets to that size's default material+labor price;
+      // editing price directly (or just changing qty) leaves it alone.
+      if (changes.size !== undefined && changes.pricePerUnit === undefined && changes.materialPricePerUnit === undefined) {
+        const d = chimneyDefaultsFor(changes.size);
+        updated.pricePerUnit = d.labor;
+        updated.materialPricePerUnit = d.material;
       }
       const qty = updated.qty ?? 1;
       const materialPricePerUnit = updated.materialPricePerUnit ?? 0;
@@ -442,6 +459,51 @@ export default function EstimatorPage() {
     queryKey: ["/api/estimates", params.id],
     enabled: !isNew && !!params.id,
   });
+
+  // ─── Shared price book — every save updates it, new estimates prefill from it ──
+  const { data: priceDefaults } = useQuery<PriceDefaults>({
+    queryKey: ["/api/price-defaults"],
+  });
+
+  // Prefill a brand-new estimate's material/labor prices from the shared
+  // price book, so the last admin's edits carry forward automatically.
+  // Existing estimates keep whatever was saved with them (handled below).
+  useEffect(() => {
+    if (!isNew || !priceDefaults) return;
+    const set = (v: number | null | undefined, setter: (s: string) => void) => {
+      if (v !== null && v !== undefined) setter(String(v));
+    };
+    set(priceDefaults.shinglePricePerSq, setShinglePrice);
+    set(priceDefaults.shingleMaterialPricePerSq, setShingleMaterialPrice);
+    set(priceDefaults.underlaymentPricePerSq, setUnderlaymentPrice);
+    set(priceDefaults.underlaymentMaterialPricePerSq, setUnderlaymentMaterialPrice);
+    set(priceDefaults.starterPricePerUnit, setStarterPrice);
+    set(priceDefaults.starterMaterialPricePerUnit, setStarterMaterialPrice);
+    set(priceDefaults.ridgeCapPricePerUnit, setRidgeCapPrice);
+    set(priceDefaults.ridgeCapMaterialPricePerUnit, setRidgeCapMaterialPrice);
+    set(priceDefaults.iceWaterPricePerUnit, setIceWaterPrice);
+    set(priceDefaults.iceWaterMaterialPricePerUnit, setIceWaterMaterialPrice);
+    set(priceDefaults.dripEdgePricePerUnit, setDripEdgePrice);
+    set(priceDefaults.dripEdgeMaterialPricePerUnit, setDripEdgeMaterialPrice);
+    set(priceDefaults.stepFlashingPricePerUnit, setStepFlashingPrice);
+    set(priceDefaults.stepFlashingMaterialPricePerUnit, setStepFlashingMaterialPrice);
+    set(priceDefaults.trimCoilPricePerUnit, setTrimCoilPrice);
+    set(priceDefaults.trimCoilMaterialPricePerUnit, setTrimCoilMaterialPrice);
+    set(priceDefaults.pipeBootsPricePerUnit, setPipeBootsPrice);
+    set(priceDefaults.pipeBootsMaterialPricePerUnit, setPipeBootsMaterialPrice);
+    set(priceDefaults.stationaryVentsPricePerUnit, setStationaryVentsPrice);
+    set(priceDefaults.stationaryVentsMaterialPricePerUnit, setStationaryVentsMaterialPrice);
+    set(priceDefaults.powerVentsPricePerUnit, setPowerVentsPrice);
+    set(priceDefaults.powerVentsMaterialPricePerUnit, setPowerVentsMaterialPrice);
+    set(priceDefaults.solarVentsPricePerUnit, setSolarVentsPrice);
+    set(priceDefaults.solarVentsMaterialPricePerUnit, setSolarVentsMaterialPrice);
+    set(priceDefaults.ventilationPricePerUnit, setRidgeVentPrice);
+    set(priceDefaults.ventilationMaterialPricePerUnit, setRidgeVentMaterialPrice);
+    set(priceDefaults.deckingPricePerUnit, setDeckingPrice);
+    set(priceDefaults.deckingMaterialPricePerUnit, setDeckingMaterialPrice);
+    set(priceDefaults.flintlasticPricePerUnit, setFlintlasticPrice);
+    set(priceDefaults.flintlasticMaterialPricePerUnit, setFlintlasticMaterialPrice);
+  }, [isNew, priceDefaults]);
 
   useEffect(() => {
     if (!existingEstimate) return;
@@ -616,6 +678,7 @@ export default function EstimatorPage() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/estimates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/price-defaults"] });
       toast({ title: "Estimate saved", description: fmtBig(grandTotal) });
       if (isNew && data?.id) setLocation(`/estimate/${data.id}`);
     },
