@@ -27,6 +27,21 @@ export interface GafReportData {
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
+  // Per-structure breakdown from the report's "Buildings" page — only
+  // populated (length >= 2) when the report covers more than one roof
+  // structure (e.g. a house plus a detached garage). Empty otherwise.
+  buildings: GafBuildingData[];
+}
+
+// The measurement subset the estimator can actually use, broken out per
+// building instead of summed across the whole report.
+export interface GafBuildingData {
+  roofAreaSqFt: number | null;
+  pitch: string | null;
+  dripEdgeFt: number | null;
+  leakBarrierFt: number | null;
+  ridgeCapFt: number | null;
+  starterFt: number | null;
 }
 
 function extractNumber(text: string, label: string, unit: string): number | null {
@@ -47,6 +62,70 @@ function extractAddress(text: string): string | null {
   return firstLine;
 }
 
+// The "Buildings" page repeats each Summary-page label on its own line, but
+// with one "value unit" pair per building instead of a single aggregate
+// value, e.g. "Roof Area 3,250 sq ft 164 sq ft" for a 2-building report.
+// Isolate that page's text (from the "Buildings" heading up to the next
+// page-break marker) so per-building regexes can't accidentally match the
+// Summary page's single aggregate values.
+function extractBuildingsSection(text: string): string | null {
+  const headingMatch = text.match(/^Buildings\s*$/im);
+  if (!headingMatch || headingMatch.index === undefined) return null;
+  const rest = text.slice(headingMatch.index);
+  const nextPageBreak = rest.slice(1).search(/\n--\s*\d+\s*of\s*\d+\s*--/);
+  return nextPageBreak === -1 ? rest : rest.slice(0, nextPageBreak + 1);
+}
+
+// Extract every "value unit" pair (in order) from a labeled line within the
+// Buildings section, e.g. label="Drip Edge" unit="ft" on
+// "Drip Edge 167 ft 219 ft 60 ft 44 ft" → [167, 219, 60, 44].
+function extractBuildingValues(section: string, label: string, unit: string): number[] {
+  const lineMatch = section.match(new RegExp(`^${label}\\s+(.+)$`, "im"));
+  if (!lineMatch) return [];
+  const valueRe = new RegExp(`([\\d,]+(?:\\.\\d+)?)\\s*${unit}`, "g");
+  const values: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = valueRe.exec(lineMatch[1])) !== null) {
+    const n = parseFloat(m[1].replace(/,/g, ""));
+    if (!isNaN(n)) values.push(n);
+  }
+  return values;
+}
+
+// Pitch pairs don't fit the "value unit" shape ("Pitch 6 / 12 7 / 12"), so
+// they get their own extractor.
+function extractBuildingPitches(section: string): string[] {
+  const lineMatch = section.match(/^Pitch\s+(.+)$/im);
+  if (!lineMatch) return [];
+  const pitches: string[] = [];
+  const pitchRe = /(\d+)\s*\/\s*(\d+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = pitchRe.exec(lineMatch[1])) !== null) pitches.push(`${m[1]}/${m[2]}`);
+  return pitches;
+}
+
+function extractBuildings(text: string): GafBuildingData[] {
+  const section = extractBuildingsSection(text);
+  if (!section) return [];
+  const roofAreas = extractBuildingValues(section, "Roof Area", "sq\\s*ft");
+  // A single column means the report only covers one structure — nothing
+  // extra to offer beyond the Summary page's aggregate figures.
+  if (roofAreas.length < 2) return [];
+  const pitches = extractBuildingPitches(section);
+  const dripEdges = extractBuildingValues(section, "Drip Edge", "ft");
+  const leakBarriers = extractBuildingValues(section, "Leak Barrier", "ft");
+  const ridgeCaps = extractBuildingValues(section, "Ridge Cap", "ft");
+  const starters = extractBuildingValues(section, "Starter", "ft");
+  return roofAreas.map((roofAreaSqFt, i) => ({
+    roofAreaSqFt,
+    pitch: pitches[i] ?? null,
+    dripEdgeFt: dripEdges[i] ?? null,
+    leakBarrierFt: leakBarriers[i] ?? null,
+    ridgeCapFt: ridgeCaps[i] ?? null,
+    starterFt: starters[i] ?? null,
+  }));
+}
+
 export function parseGafReport(text: string): GafReportData {
   const pitchMatch = text.match(/^Pitch\s+(\d+)\s*\/\s*(\d+)\s*$/im);
   return {
@@ -63,5 +142,6 @@ export function parseGafReport(text: string): GafReportData {
     leakBarrierFt: extractNumber(text, "Leak Barrier", "ft"),
     ridgeCapFt: extractNumber(text, "Ridge Cap", "ft"),
     starterFt: extractNumber(text, "Starter", "ft"),
+    buildings: extractBuildings(text),
   };
 }

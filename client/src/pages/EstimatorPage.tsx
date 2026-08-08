@@ -12,11 +12,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, Save, Eye, EyeOff, Plus, Trash2, Printer, Upload } from "lucide-react";
 import type { Estimate, SkylightItem, ChimneyItem, PriceDefaults } from "@shared/schema";
 import { ALL_VELUX_MODELS, SKYLIGHT_INSTALL_COST, SKYLIGHT_FLASHING_COST } from "@/lib/velux";
 
 // GAF QuickMeasure "Full Report" PDF import — matches server/gafParser.ts's output
+interface GafBuildingData {
+  roofAreaSqFt: number | null;
+  pitch: string | null;
+  dripEdgeFt: number | null;
+  leakBarrierFt: number | null;
+  ridgeCapFt: number | null;
+  starterFt: number | null;
+}
 interface GafReportData {
   address: string | null;
   roofAreaSqFt: number | null;
@@ -31,6 +40,35 @@ interface GafReportData {
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
+  buildings: GafBuildingData[];
+}
+
+// Summarize a GAF report's measurements into the estimator's applicable
+// fields, optionally excluding certain buildings (split out into their own
+// estimate instead of being folded into this one). With no buildings data
+// (single-structure reports) or nothing excluded, this reduces to the
+// report's own aggregate Summary-page figures.
+function summarizeGafBuildings(data: GafReportData, excluded: Set<number>): {
+  roofAreaSqFt: number | null; pitch: string | null; dripEdgeFt: number | null;
+  leakBarrierFt: number | null; ridgeCapFt: number | null; starterFt: number | null;
+} {
+  if (data.buildings.length === 0 || excluded.size === 0) {
+    return {
+      roofAreaSqFt: data.roofAreaSqFt, pitch: data.pitch, dripEdgeFt: data.dripEdgeFt,
+      leakBarrierFt: data.leakBarrierFt, ridgeCapFt: data.ridgeCapFt, starterFt: data.starterFt,
+    };
+  }
+  const included = data.buildings.filter((_, i) => !excluded.has(i));
+  const sum = (key: keyof GafBuildingData) => included.reduce((s, b) => s + (Number(b[key]) || 0), 0);
+  const largest = included.reduce((a, b) => (b.roofAreaSqFt ?? 0) > (a?.roofAreaSqFt ?? 0) ? b : a, included[0]);
+  return {
+    roofAreaSqFt: included.length ? sum("roofAreaSqFt") : null,
+    pitch: largest?.pitch ?? data.pitch,
+    dripEdgeFt: included.length ? sum("dripEdgeFt") : null,
+    leakBarrierFt: included.length ? sum("leakBarrierFt") : null,
+    ridgeCapFt: included.length ? sum("ridgeCapFt") : null,
+    starterFt: included.length ? sum("starterFt") : null,
+  };
 }
 
 // ─── Pricing model ────────────────────────────────────────────────────────────
@@ -414,8 +452,18 @@ export default function EstimatorPage() {
   const [gafDialogOpen, setGafDialogOpen] = useState(false);
   const [gafData, setGafData] = useState<GafReportData | null>(null);
   const [gafLoading, setGafLoading] = useState(false);
+  // Indices into gafData.buildings the user has marked as separate
+  // structures (garage, shed, etc.) to be split into their own estimate
+  // instead of folded into this one's totals.
+  const [splitBuildings, setSplitBuildings] = useState<Set<number>>(new Set());
+  const [gafCreatingSeparate, setGafCreatingSeparate] = useState(false);
 
   const triggerGafImport = () => gafFileInputRef.current?.click();
+  const toggleSplitBuilding = (i: number) => setSplitBuildings(prev => {
+    const next = new Set(prev);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    return next;
+  });
 
   const handleGafFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -432,6 +480,7 @@ export default function EstimatorPage() {
       }
       const data: GafReportData = await res.json();
       setGafData(data);
+      setSplitBuildings(new Set());
       setGafDialogOpen(true);
     } catch (err: any) {
       toast({ title: "Import failed", description: err?.message || "Could not read that PDF.", variant: "destructive" });
@@ -440,24 +489,138 @@ export default function EstimatorPage() {
     }
   };
 
-  const applyGafData = () => {
+  // Build a full new-estimate payload for a single split-out building,
+  // mirroring what a brand-new estimate would look like if its GAF numbers
+  // were applied and saved untouched: current price book, standard 15%
+  // waste, 40% markup, office commission, no tax.
+  const buildSplitEstimatePayload = (b: GafBuildingData, label: string) => {
+    const squares = b.roofAreaSqFt != null ? b.roofAreaSqFt / 100 : 0;
+    const pitch = b.pitch && PITCHES.includes(b.pitch) ? b.pitch : "6/12";
+    const sqWithWaste = roundUpToThird(squares * 1.15);
+    const shingleQtyVal = sqWithWaste;
+    const underlaymentQtyVal = roundUpToTen(sqWithWaste);
+    const dripEdgeVal = b.dripEdgeFt ?? 0;
+    const iceWaterVal = b.leakBarrierFt ?? 0;
+    const ridgeCapVal = b.ridgeCapFt ?? 0;
+    const starterVal = b.starterFt ?? 0;
+
+    const shinglePriceV = num(priceDefaults?.shinglePricePerSq) || D.shingle;
+    const shingleMatV = num(priceDefaults?.shingleMaterialPricePerSq);
+    const underlaymentPriceV = num(priceDefaults?.underlaymentPricePerSq) || (UL_ROLL_COST / UL_ROLL_SQ);
+    const underlaymentMatV = num(priceDefaults?.underlaymentMaterialPricePerSq);
+    const starterPriceV = num(priceDefaults?.starterPricePerUnit) || (ST_BUNDLE_COST / ST_BUNDLE_LF);
+    const starterMatV = num(priceDefaults?.starterMaterialPricePerUnit);
+    const ridgeCapPriceV = num(priceDefaults?.ridgeCapPricePerUnit) || (HR_BUNDLE_COST / HR_BUNDLE_LF);
+    const ridgeCapMatV = num(priceDefaults?.ridgeCapMaterialPricePerUnit);
+    const iceWaterPriceV = num(priceDefaults?.iceWaterPricePerUnit) || (IW_ROLL_COST / IW_ROLL_LF);
+    const iceWaterMatV = num(priceDefaults?.iceWaterMaterialPricePerUnit);
+    const dripEdgePriceV = num(priceDefaults?.dripEdgePricePerUnit) || (DE_PIECE_COST / DE_PIECE_LF);
+    const dripEdgeMatV = num(priceDefaults?.dripEdgeMaterialPricePerUnit);
+
+    const cost = (qty: number, mat: number, labor: number) => qty * (mat + labor);
+    const Av = cost(shingleQtyVal, shingleMatV, shinglePriceV)
+      + cost(underlaymentQtyVal, underlaymentMatV, underlaymentPriceV)
+      + cost(starterVal, starterMatV, starterPriceV)
+      + cost(ridgeCapVal, ridgeCapMatV, ridgeCapPriceV)
+      + cost(iceWaterVal, iceWaterMatV, iceWaterPriceV)
+      + cost(dripEdgeVal, dripEdgeMatV, dripEdgePriceV)
+      + MISC_AMOUNT;
+    const grandTotalV = (Av + Av * DEFAULT_MARKUP_RATE) / (1 - COMMISSION_OFFICE);
+
+    return {
+      customerName,
+      customerAddress: customerAddress ? `${customerAddress} (${label})` : label,
+      customerPhone: customerPhone || null,
+      customerEmail: customerEmail || null,
+      notes: `Imported from GAF QuickMeasure report — ${label}.`,
+      createdAt: new Date().toISOString(),
+      section1Squares: squares || null,
+      section1Pitch: pitch,
+      wastePercent: 15,
+      totalSquares: squares,
+      totalSquaresWithWaste: sqWithWaste,
+      materialTaxRate: 0,
+      layersToRemove: 1,
+      shingleType: "Landmark",
+      shingleQty: shingleQtyVal || null,
+      shinglePricePerSq: shinglePriceV,
+      shingleMaterialPricePerSq: shingleMatV,
+      underlaymentQty: underlaymentQtyVal || null,
+      underlaymentPricePerSq: underlaymentPriceV,
+      underlaymentMaterialPricePerSq: underlaymentMatV,
+      starterQty: starterVal || null,
+      starterPricePerUnit: starterPriceV,
+      starterMaterialPricePerUnit: starterMatV,
+      ridgeCapQty: ridgeCapVal || null,
+      ridgeCapPricePerUnit: ridgeCapPriceV,
+      ridgeCapMaterialPricePerUnit: ridgeCapMatV,
+      iceWaterQty: iceWaterVal || null,
+      iceWaterPricePerUnit: iceWaterPriceV,
+      iceWaterMaterialPricePerUnit: iceWaterMatV,
+      dripEdgeQty: dripEdgeVal || null,
+      dripEdgeColor: "White",
+      dripEdgePricePerUnit: dripEdgePriceV,
+      dripEdgeMaterialPricePerUnit: dripEdgeMatV,
+      miscAmount: MISC_AMOUNT,
+      subtotal: Av,
+      totalWithMisc: grandTotalV,
+      status: "draft",
+    };
+  };
+
+  const applyGafData = async () => {
     if (!gafData) return;
+    const summary = summarizeGafBuildings(gafData, splitBuildings);
     if (gafData.address) setCustomerAddress(gafData.address);
-    if (gafData.roofAreaSqFt != null) {
-      const squares = (gafData.roofAreaSqFt / 100).toFixed(2);
-      const pitch = gafData.pitch && PITCHES.includes(gafData.pitch) ? gafData.pitch : sections[0]?.pitch;
+    if (summary.roofAreaSqFt != null) {
+      const squares = (summary.roofAreaSqFt / 100).toFixed(2);
+      const pitch = summary.pitch && PITCHES.includes(summary.pitch) ? summary.pitch : sections[0]?.pitch;
       setSections(prev => {
         const next = [...prev];
         next[0] = { ...next[0], squares, pitch: pitch || next[0].pitch };
         return next;
       });
     }
-    if (gafData.dripEdgeFt != null) setDripEdgeQty(String(gafData.dripEdgeFt));
-    if (gafData.leakBarrierFt != null) setIceWaterQty(String(gafData.leakBarrierFt));
-    if (gafData.ridgeCapFt != null) setRidgeCapQty(String(gafData.ridgeCapFt));
-    if (gafData.starterFt != null) setStarterQty(String(gafData.starterFt));
+    if (summary.dripEdgeFt != null) setDripEdgeQty(String(summary.dripEdgeFt));
+    if (summary.leakBarrierFt != null) setIceWaterQty(String(summary.leakBarrierFt));
+    if (summary.ridgeCapFt != null) setRidgeCapQty(String(summary.ridgeCapFt));
+    if (summary.starterFt != null) setStarterQty(String(summary.starterFt));
+
+    const splitEntries = gafData.buildings
+      .map((b, i) => ({ b, i }))
+      .filter(({ i }) => splitBuildings.has(i));
+
+    if (splitEntries.length === 0) {
+      setGafDialogOpen(false);
+      toast({ title: "Imported from GAF report", description: "Roof measurements applied." });
+      return;
+    }
+
+    setGafCreatingSeparate(true);
+    let created = 0;
+    for (const { b, i } of splitEntries) {
+      try {
+        await apiRequest("POST", "/api/estimates", buildSplitEstimatePayload(b, `Building ${i + 1}`));
+        created++;
+      } catch (err) {
+        console.error("Failed to create split estimate:", err);
+      }
+    }
+    setGafCreatingSeparate(false);
+    queryClient.invalidateQueries({ queryKey: ["/api/estimates"] });
     setGafDialogOpen(false);
-    toast({ title: "Imported from GAF report", description: "Roof measurements applied." });
+    if (created === splitEntries.length) {
+      toast({
+        title: "Imported from GAF report",
+        description: `Main estimate updated, plus ${created} separate estimate${created === 1 ? "" : "s"} created for the additional structure${created === 1 ? "" : "s"}.`,
+      });
+    } else {
+      toast({
+        title: "Partially imported",
+        description: `Main estimate updated. Only ${created} of ${splitEntries.length} separate estimates could be created — check the estimates list.`,
+        variant: "destructive",
+      });
+    }
   };
 
   // ─── Skylight helpers ─────────────────────────────────────────────────────
@@ -762,28 +925,52 @@ export default function EstimatorPage() {
     <div className="min-h-screen bg-background">
       <input ref={gafFileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleGafFileChange} />
       <Dialog open={gafDialogOpen} onOpenChange={setGafDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Import from GAF Report</DialogTitle>
             <DialogDescription>Review the values found before applying them to this estimate.</DialogDescription>
           </DialogHeader>
-          {gafData && (
-            <div className="text-sm">
-              <GafReviewRow label="Job Address" value={gafData.address} />
-              <GafReviewRow label="Squares (Roof Area)" value={gafData.roofAreaSqFt != null ? `${(gafData.roofAreaSqFt / 100).toFixed(2)} SQ (${gafData.roofAreaSqFt.toLocaleString()} sq ft)` : null} />
-              <GafReviewRow label="Pitch" value={gafData.pitch} />
-              <GafReviewRow label="Drip Edge (eaves + rakes)" value={gafData.dripEdgeFt != null ? `${gafData.dripEdgeFt.toLocaleString()} FT` : null} />
-              <GafReviewRow label="Ice & Water Shield (leak barrier)" value={gafData.leakBarrierFt != null ? `${gafData.leakBarrierFt.toLocaleString()} FT` : null} />
-              <GafReviewRow label="Hip & Ridge (ridge cap)" value={gafData.ridgeCapFt != null ? `${gafData.ridgeCapFt.toLocaleString()} FT` : null} />
-              <GafReviewRow label="Starter Strip" value={gafData.starterFt != null ? `${gafData.starterFt.toLocaleString()} FT` : null} />
-              <p className="text-xs text-muted-foreground pt-3">
-                Waste % isn't set automatically — the report's suggested waste factor can't be read reliably from the PDF, so double-check it manually. This will overwrite the Address field, Section 1's squares/pitch, and the Drip Edge, Ice & Water, Hip & Ridge, and Starter Strip quantities above.
-              </p>
-            </div>
-          )}
+          {gafData && (() => {
+            const summary = summarizeGafBuildings(gafData, splitBuildings);
+            return (
+              <div className="text-sm">
+                <GafReviewRow label="Job Address" value={gafData.address} />
+                <GafReviewRow label="Squares (Roof Area)" value={summary.roofAreaSqFt != null ? `${(summary.roofAreaSqFt / 100).toFixed(2)} SQ (${summary.roofAreaSqFt.toLocaleString()} sq ft)` : null} />
+                <GafReviewRow label="Pitch" value={summary.pitch} />
+                <GafReviewRow label="Drip Edge (eaves + rakes)" value={summary.dripEdgeFt != null ? `${summary.dripEdgeFt.toLocaleString()} FT` : null} />
+                <GafReviewRow label="Ice & Water Shield (leak barrier)" value={summary.leakBarrierFt != null ? `${summary.leakBarrierFt.toLocaleString()} FT` : null} />
+                <GafReviewRow label="Hip & Ridge (ridge cap)" value={summary.ridgeCapFt != null ? `${summary.ridgeCapFt.toLocaleString()} FT` : null} />
+                <GafReviewRow label="Starter Strip" value={summary.starterFt != null ? `${summary.starterFt.toLocaleString()} FT` : null} />
+                <p className="text-xs text-muted-foreground pt-3">
+                  Waste % isn't set automatically — the report's suggested waste factor can't be read reliably from the PDF, so double-check it manually. This will overwrite the Address field, Section 1's squares/pitch, and the Drip Edge, Ice & Water, Hip & Ridge, and Starter Strip quantities above.
+                </p>
+                {gafData.buildings.length > 1 && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <p className="font-medium mb-1">This report covers {gafData.buildings.length} roof structures</p>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      If any of these are separate buildings — a detached garage, shed, etc. — rather than part of the main roof, check them below. Checked structures are left out of the totals above and get their own new estimate instead.
+                    </p>
+                    <div className="space-y-1.5">
+                      {gafData.buildings.map((b, i) => (
+                        <label key={i} className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox checked={splitBuildings.has(i)} onCheckedChange={() => toggleSplitBuilding(i)} />
+                          <span>
+                            Building {i + 1} — {b.roofAreaSqFt != null ? `${b.roofAreaSqFt.toLocaleString()} sq ft` : "? sq ft"}
+                            {b.pitch ? `, ${b.pitch} pitch` : ""}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setGafDialogOpen(false)}>Cancel</Button>
-            <Button onClick={applyGafData}>Apply to Estimate</Button>
+            <Button variant="outline" onClick={() => setGafDialogOpen(false)} disabled={gafCreatingSeparate}>Cancel</Button>
+            <Button onClick={applyGafData} disabled={gafCreatingSeparate}>
+              {gafCreatingSeparate ? "Creating estimates…" : "Apply to Estimate"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
