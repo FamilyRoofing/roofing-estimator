@@ -14,6 +14,7 @@
 // only the Summary page's aggregate figures and skips the Buildings page.
 
 export interface GafReportData {
+  address: string | null; // property/job address — the report's title line
   roofAreaSqFt: number | null;
   roofFacets: number | null;
   pitch: string | null; // e.g. "6/12" — matches the estimator's PITCHES options
@@ -36,9 +37,20 @@ function extractNumber(text: string, label: string, unit: string): number | null
   return isNaN(n) ? null : n;
 }
 
+// The report's very first line is the property address (e.g. "311
+// Greenville Street, Pendleton, South Carolina 29670"), repeated in every
+// page footer alongside "Prepared For: <company>". Require a comma so we
+// don't accidentally grab a stray blank/garbage first line.
+function extractAddress(text: string): string | null {
+  const firstLine = text.split("\n").map(l => l.trim()).find(l => l.length > 0);
+  if (!firstLine || !firstLine.includes(",")) return null;
+  return firstLine;
+}
+
 export function parseGafReport(text: string): GafReportData {
   const pitchMatch = text.match(/^Pitch\s+(\d+)\s*\/\s*(\d+)\s*$/im);
   return {
+    address: extractAddress(text),
     roofAreaSqFt: extractNumber(text, "Roof Area", "sq\\s*ft"),
     roofFacets: extractNumber(text, "Roof Facets", ""),
     pitch: pitchMatch ? `${pitchMatch[1]}/${pitchMatch[2]}` : null,

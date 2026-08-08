@@ -18,6 +18,7 @@ import { ALL_VELUX_MODELS, SKYLIGHT_INSTALL_COST, SKYLIGHT_FLASHING_COST } from 
 
 // GAF QuickMeasure "Full Report" PDF import — matches server/gafParser.ts's output
 interface GafReportData {
+  address: string | null;
   roofAreaSqFt: number | null;
   roofFacets: number | null;
   pitch: string | null;
@@ -441,6 +442,7 @@ export default function EstimatorPage() {
 
   const applyGafData = () => {
     if (!gafData) return;
+    if (gafData.address) setCustomerAddress(gafData.address);
     if (gafData.roofAreaSqFt != null) {
       const squares = (gafData.roofAreaSqFt / 100).toFixed(2);
       const pitch = gafData.pitch && PITCHES.includes(gafData.pitch) ? gafData.pitch : sections[0]?.pitch;
@@ -767,6 +769,7 @@ export default function EstimatorPage() {
           </DialogHeader>
           {gafData && (
             <div className="text-sm">
+              <GafReviewRow label="Job Address" value={gafData.address} />
               <GafReviewRow label="Squares (Roof Area)" value={gafData.roofAreaSqFt != null ? `${(gafData.roofAreaSqFt / 100).toFixed(2)} SQ (${gafData.roofAreaSqFt.toLocaleString()} sq ft)` : null} />
               <GafReviewRow label="Pitch" value={gafData.pitch} />
               <GafReviewRow label="Drip Edge (eaves + rakes)" value={gafData.dripEdgeFt != null ? `${gafData.dripEdgeFt.toLocaleString()} FT` : null} />
@@ -774,7 +777,7 @@ export default function EstimatorPage() {
               <GafReviewRow label="Hip & Ridge (ridge cap)" value={gafData.ridgeCapFt != null ? `${gafData.ridgeCapFt.toLocaleString()} FT` : null} />
               <GafReviewRow label="Starter Strip" value={gafData.starterFt != null ? `${gafData.starterFt.toLocaleString()} FT` : null} />
               <p className="text-xs text-muted-foreground pt-3">
-                Waste % isn't set automatically — the report's suggested waste factor can't be read reliably from the PDF, so double-check it manually. This will overwrite Section 1's squares/pitch and the Drip Edge, Ice & Water, Hip & Ridge, and Starter Strip quantities above.
+                Waste % isn't set automatically — the report's suggested waste factor can't be read reliably from the PDF, so double-check it manually. This will overwrite the Address field, Section 1's squares/pitch, and the Drip Edge, Ice & Water, Hip & Ridge, and Starter Strip quantities above.
               </p>
             </div>
           )}
