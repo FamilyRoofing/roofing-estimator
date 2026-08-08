@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -11,9 +11,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ChevronLeft, Save, Eye, EyeOff, Plus, Trash2, Printer } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { ChevronLeft, Save, Eye, EyeOff, Plus, Trash2, Printer, Upload } from "lucide-react";
 import type { Estimate, SkylightItem, ChimneyItem, PriceDefaults } from "@shared/schema";
 import { ALL_VELUX_MODELS, SKYLIGHT_INSTALL_COST, SKYLIGHT_FLASHING_COST } from "@/lib/velux";
+
+// GAF QuickMeasure "Full Report" PDF import — matches server/gafParser.ts's output
+interface GafReportData {
+  roofAreaSqFt: number | null;
+  roofFacets: number | null;
+  pitch: string | null;
+  eavesFt: number | null;
+  hipsFt: number | null;
+  rakesFt: number | null;
+  ridgesFt: number | null;
+  valleysFt: number | null;
+  dripEdgeFt: number | null;
+  leakBarrierFt: number | null;
+  ridgeCapFt: number | null;
+  starterFt: number | null;
+}
 
 // ─── Pricing model ────────────────────────────────────────────────────────────
 // A     = raw material costs + hidden misc $220
@@ -391,6 +408,56 @@ export default function EstimatorPage() {
   const updateSection = (i: number, field: "squares" | "pitch", val: string) =>
     setSections(sections.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
 
+  // ─── GAF QuickMeasure report import ───────────────────────────────────────
+  const gafFileInputRef = useRef<HTMLInputElement>(null);
+  const [gafDialogOpen, setGafDialogOpen] = useState(false);
+  const [gafData, setGafData] = useState<GafReportData | null>(null);
+  const [gafLoading, setGafLoading] = useState(false);
+
+  const triggerGafImport = () => gafFileInputRef.current?.click();
+
+  const handleGafFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    setGafLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("report", file);
+      const res = await fetch("/api/parse-gaf-report", { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}) as any);
+        throw new Error(err.error || "Failed to parse report");
+      }
+      const data: GafReportData = await res.json();
+      setGafData(data);
+      setGafDialogOpen(true);
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err?.message || "Could not read that PDF.", variant: "destructive" });
+    } finally {
+      setGafLoading(false);
+    }
+  };
+
+  const applyGafData = () => {
+    if (!gafData) return;
+    if (gafData.roofAreaSqFt != null) {
+      const squares = (gafData.roofAreaSqFt / 100).toFixed(2);
+      const pitch = gafData.pitch && PITCHES.includes(gafData.pitch) ? gafData.pitch : sections[0]?.pitch;
+      setSections(prev => {
+        const next = [...prev];
+        next[0] = { ...next[0], squares, pitch: pitch || next[0].pitch };
+        return next;
+      });
+    }
+    if (gafData.dripEdgeFt != null) setDripEdgeQty(String(gafData.dripEdgeFt));
+    if (gafData.leakBarrierFt != null) setIceWaterQty(String(gafData.leakBarrierFt));
+    if (gafData.ridgeCapFt != null) setRidgeCapQty(String(gafData.ridgeCapFt));
+    if (gafData.starterFt != null) setStarterQty(String(gafData.starterFt));
+    setGafDialogOpen(false);
+    toast({ title: "Imported from GAF report", description: "Roof measurements applied." });
+  };
+
   // ─── Skylight helpers ─────────────────────────────────────────────────────
   const addSkylight = () => setSkylights(prev => [...prev, buildSkylightItem()]);
 
@@ -691,6 +758,32 @@ export default function EstimatorPage() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
+      <input ref={gafFileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleGafFileChange} />
+      <Dialog open={gafDialogOpen} onOpenChange={setGafDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import from GAF Report</DialogTitle>
+            <DialogDescription>Review the values found before applying them to this estimate.</DialogDescription>
+          </DialogHeader>
+          {gafData && (
+            <div className="text-sm">
+              <GafReviewRow label="Squares (Roof Area)" value={gafData.roofAreaSqFt != null ? `${(gafData.roofAreaSqFt / 100).toFixed(2)} SQ (${gafData.roofAreaSqFt.toLocaleString()} sq ft)` : null} />
+              <GafReviewRow label="Pitch" value={gafData.pitch} />
+              <GafReviewRow label="Drip Edge (eaves + rakes)" value={gafData.dripEdgeFt != null ? `${gafData.dripEdgeFt.toLocaleString()} FT` : null} />
+              <GafReviewRow label="Ice & Water Shield (leak barrier)" value={gafData.leakBarrierFt != null ? `${gafData.leakBarrierFt.toLocaleString()} FT` : null} />
+              <GafReviewRow label="Hip & Ridge (ridge cap)" value={gafData.ridgeCapFt != null ? `${gafData.ridgeCapFt.toLocaleString()} FT` : null} />
+              <GafReviewRow label="Starter Strip" value={gafData.starterFt != null ? `${gafData.starterFt.toLocaleString()} FT` : null} />
+              <p className="text-xs text-muted-foreground pt-3">
+                Waste % isn't set automatically — the report's suggested waste factor can't be read reliably from the PDF, so double-check it manually. This will overwrite Section 1's squares/pitch and the Drip Edge, Ice & Water, Hip & Ridge, and Starter Strip quantities above.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGafDialogOpen(false)}>Cancel</Button>
+            <Button onClick={applyGafData}>Apply to Estimate</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-card border-b border-border shadow-sm print:hidden">
         <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
@@ -748,9 +841,14 @@ export default function EstimatorPage() {
             <div className="section-card">
               <div className="section-header flex items-center justify-between">
                 <span>Roof Measurements</span>
-                {sections.length < 3 && (
-                  <Button variant="outline" size="sm" onClick={addSection} className="gap-1 text-xs h-7 print:hidden"><Plus size={12} /> Add Section</Button>
-                )}
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={triggerGafImport} disabled={gafLoading} className="gap-1 text-xs h-7 print:hidden">
+                    <Upload size={12} /> {gafLoading ? "Importing..." : "Import GAF Report"}
+                  </Button>
+                  {sections.length < 3 && (
+                    <Button variant="outline" size="sm" onClick={addSection} className="gap-1 text-xs h-7 print:hidden"><Plus size={12} /> Add Section</Button>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-12 gap-2 mb-1 text-xs font-semibold text-muted-foreground">
                 <div className="col-span-3">Section</div>
@@ -1120,9 +1218,14 @@ export default function EstimatorPage() {
             <div className="section-card">
               <div className="section-header flex items-center justify-between">
                 <span>Roof Measurements</span>
-                {sections.length < 3 && (
-                  <Button variant="outline" size="sm" onClick={addSection} className="gap-1 text-xs h-7 print:hidden" data-testid="add-section"><Plus size={12} /> Add Section</Button>
-                )}
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={triggerGafImport} disabled={gafLoading} className="gap-1 text-xs h-7 print:hidden">
+                    <Upload size={12} /> {gafLoading ? "Importing..." : "Import GAF Report"}
+                  </Button>
+                  {sections.length < 3 && (
+                    <Button variant="outline" size="sm" onClick={addSection} className="gap-1 text-xs h-7 print:hidden" data-testid="add-section"><Plus size={12} /> Add Section</Button>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-12 gap-2 mb-1 text-xs font-semibold text-muted-foreground">
                 <div className="col-span-3">Section</div><div className="col-span-4">Squares</div><div className="col-span-4">Pitch</div><div className="col-span-1"></div>
@@ -1477,6 +1580,15 @@ export default function EstimatorPage() {
 }
 
 // ─── Shared sub-components ───────────────────────────────────────────────────
+
+function GafReviewRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex justify-between items-center py-1.5 border-b border-border/50 last:border-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={value ? "font-medium" : "text-muted-foreground italic"}>{value ?? "not found"}</span>
+    </div>
+  );
+}
 
 function ColHeaders() {
   return (

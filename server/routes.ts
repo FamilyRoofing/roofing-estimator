@@ -3,6 +3,18 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { insertEstimateSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
+import multer from "multer";
+import { PDFParse } from "pdf-parse";
+import { parseGafReport } from "./gafParser";
+
+const reportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== "application/pdf") return cb(new Error("Only PDF files are accepted"));
+    cb(null, true);
+  },
+});
 
 // ─── Session type augmentation ────────────────────────────────────────────────
 declare module "express-session" {
@@ -241,5 +253,24 @@ export function registerRoutes(httpServer: Server, app: Express) {
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch price defaults" });
     }
+  });
+
+  // ── GAF QuickMeasure report import ──────────────────────────────────────────
+
+  // POST upload + parse a GAF QuickMeasure "Full Report" PDF
+  app.post("/api/parse-gaf-report", requireAuth, (req, res) => {
+    reportUpload.single("report")(req, res, async (uploadErr) => {
+      if (uploadErr) return res.status(400).json({ error: uploadErr.message || "Upload failed" });
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+      try {
+        const parser = new PDFParse({ data: req.file.buffer });
+        const result = await parser.getText();
+        await parser.destroy();
+        res.json(parseGafReport(result.text));
+      } catch (err) {
+        console.error("GAF report parse error:", err);
+        res.status(500).json({ error: "Failed to read that PDF. Make sure it's a GAF QuickMeasure report." });
+      }
+    });
   });
 }
