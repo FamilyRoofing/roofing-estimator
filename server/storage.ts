@@ -133,44 +133,50 @@ sqlite.exec(`
 `);
 
 // Migrate: add any columns that may be missing from older databases
-const _addCol = (col: string, type: string) => {
-  try { sqlite.exec(`ALTER TABLE estimates ADD COLUMN ${col} ${type}`); } catch {}
+const _addCol = (table: string, col: string, type: string) => {
+  try { sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); } catch {}
 };
-_addCol("user_id", "INTEGER");
-_addCol("referral_fee", "REAL");
-_addCol("referral_name", "TEXT");
-_addCol("layers_to_remove", "REAL DEFAULT 1");
-_addCol("layers_qty", "REAL");
-_addCol("layers_price_per_unit", "REAL");
-_addCol("stationary_vents_qty", "REAL");
-_addCol("stationary_vents_price_per_unit", "REAL");
-_addCol("power_vents_qty", "REAL");
-_addCol("power_vents_price_per_unit", "REAL");
-_addCol("solar_vents_qty", "REAL");
-_addCol("solar_vents_price_per_unit", "REAL");
-_addCol("chimney_qty", "REAL");
-_addCol("chimney_size", "TEXT");
-_addCol("chimney_price_per_unit", "REAL");
-_addCol("chimneys_json", "TEXT");
-_addCol("flintlastic_qty", "REAL");
-_addCol("flintlastic_price_per_unit", "REAL");
-_addCol("material_tax_rate", "REAL DEFAULT 0");
-_addCol("shingle_material_price_per_sq", "REAL");
-_addCol("underlayment_material_price_per_sq", "REAL");
-_addCol("starter_material_price_per_unit", "REAL");
-_addCol("ridge_cap_material_price_per_unit", "REAL");
-_addCol("ice_water_material_price_per_unit", "REAL");
-_addCol("drip_edge_material_price_per_unit", "REAL");
-_addCol("step_flashing_material_price_per_unit", "REAL");
-_addCol("trim_coil_material_price_per_unit", "REAL");
-_addCol("pipe_boots_material_price_per_unit", "REAL");
-_addCol("stationary_vents_material_price_per_unit", "REAL");
-_addCol("power_vents_material_price_per_unit", "REAL");
-_addCol("solar_vents_material_price_per_unit", "REAL");
-_addCol("ventilation_material_price_per_unit", "REAL");
-_addCol("decking_material_price_per_unit", "REAL");
-_addCol("flintlastic_material_price_per_unit", "REAL");
-_addCol("construction_type", "TEXT DEFAULT 'reroof'");
+_addCol("estimates", "user_id", "INTEGER");
+_addCol("estimates", "referral_fee", "REAL");
+_addCol("estimates", "referral_name", "TEXT");
+_addCol("estimates", "layers_to_remove", "REAL DEFAULT 1");
+_addCol("estimates", "layers_qty", "REAL");
+_addCol("estimates", "layers_price_per_unit", "REAL");
+_addCol("estimates", "stationary_vents_qty", "REAL");
+_addCol("estimates", "stationary_vents_price_per_unit", "REAL");
+_addCol("estimates", "power_vents_qty", "REAL");
+_addCol("estimates", "power_vents_price_per_unit", "REAL");
+_addCol("estimates", "solar_vents_qty", "REAL");
+_addCol("estimates", "solar_vents_price_per_unit", "REAL");
+_addCol("estimates", "chimney_qty", "REAL");
+_addCol("estimates", "chimney_size", "TEXT");
+_addCol("estimates", "chimney_price_per_unit", "REAL");
+_addCol("estimates", "chimneys_json", "TEXT");
+_addCol("estimates", "flintlastic_qty", "REAL");
+_addCol("estimates", "flintlastic_price_per_unit", "REAL");
+_addCol("estimates", "material_tax_rate", "REAL DEFAULT 0");
+_addCol("estimates", "shingle_material_price_per_sq", "REAL");
+_addCol("estimates", "underlayment_material_price_per_sq", "REAL");
+_addCol("estimates", "starter_material_price_per_unit", "REAL");
+_addCol("estimates", "ridge_cap_material_price_per_unit", "REAL");
+_addCol("estimates", "ice_water_material_price_per_unit", "REAL");
+_addCol("estimates", "drip_edge_material_price_per_unit", "REAL");
+_addCol("estimates", "step_flashing_material_price_per_unit", "REAL");
+_addCol("estimates", "trim_coil_material_price_per_unit", "REAL");
+_addCol("estimates", "pipe_boots_material_price_per_unit", "REAL");
+_addCol("estimates", "stationary_vents_material_price_per_unit", "REAL");
+_addCol("estimates", "power_vents_material_price_per_unit", "REAL");
+_addCol("estimates", "solar_vents_material_price_per_unit", "REAL");
+_addCol("estimates", "ventilation_material_price_per_unit", "REAL");
+_addCol("estimates", "decking_material_price_per_unit", "REAL");
+_addCol("estimates", "flintlastic_material_price_per_unit", "REAL");
+_addCol("estimates", "construction_type", "TEXT DEFAULT 'reroof'");
+_addCol("estimates", "landmark_pro_qty", "REAL");
+_addCol("estimates", "four_star_warranty_qty", "REAL");
+_addCol("estimates", "four_star_warranty_price_per_unit", "REAL");
+_addCol("estimates", "four_star_warranty_material_price_per_unit", "REAL");
+_addCol("price_defaults", "four_star_warranty_price_per_unit", "REAL");
+_addCol("price_defaults", "four_star_warranty_material_price_per_unit", "REAL");
 
 // ─── Seed / secure default admin account ───────────────────────────────────────
 // Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a

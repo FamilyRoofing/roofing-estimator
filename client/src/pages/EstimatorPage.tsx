@@ -25,6 +25,7 @@ interface GafBuildingData {
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
+  ridgesFt: number | null;
 }
 interface GafReportData {
   address: string | null;
@@ -51,12 +52,13 @@ interface GafReportData {
 // report's own aggregate Summary-page figures.
 function summarizeGafBuildings(data: GafReportData, excluded: Set<number>): {
   roofAreaSqFt: number | null; pitch: string | null; dripEdgeFt: number | null;
-  leakBarrierFt: number | null; ridgeCapFt: number | null; starterFt: number | null;
+  leakBarrierFt: number | null; ridgeCapFt: number | null; starterFt: number | null; ridgesFt: number | null;
 } {
   if (data.buildings.length === 0 || excluded.size === 0) {
     return {
       roofAreaSqFt: data.roofAreaSqFt, pitch: data.pitch, dripEdgeFt: data.dripEdgeFt,
       leakBarrierFt: data.leakBarrierFt, ridgeCapFt: data.ridgeCapFt, starterFt: data.starterFt,
+      ridgesFt: data.ridgesFt,
     };
   }
   const included = data.buildings.filter((_, i) => !excluded.has(i));
@@ -69,6 +71,7 @@ function summarizeGafBuildings(data: GafReportData, excluded: Set<number>): {
     leakBarrierFt: included.length ? sum("leakBarrierFt") : null,
     ridgeCapFt: included.length ? sum("ridgeCapFt") : null,
     starterFt: included.length ? sum("starterFt") : null,
+    ridgesFt: included.length ? sum("ridgesFt") : null,
   };
 }
 
@@ -93,7 +96,7 @@ function pitchAdderPerSq(pitch: string): number {
   return n > 8 ? (n - 8) * 5 : 0;
 }
 const DRIP_EDGE_COLORS = ["White","Black","Brown","Almond","Mill Finish"];
-const SHINGLE_TYPES = ["Landmark","Landmark PRO"];
+const SHINGLE_TYPES = ["Landmark"];
 const DECKING_THICKNESSES = ["7/16\"","15/32\"","19/32\"","23/32\""];
 const DECKING_TYPES = ["Plywood","OSB"];
 
@@ -341,6 +344,15 @@ export default function EstimatorPage() {
   const [flintlasticPrice, setFlintlasticPrice] = useState("301");
   const [flintlasticMaterialPrice, setFlintlasticMaterialPrice] = useState("0");
 
+  // Landmark PRO — its own line item; material/labor prices are derived from
+  // the base Landmark shingle prices below (see landmarkProTotal), only qty
+  // is independently entered.
+  const [landmarkProQty, setLandmarkProQty] = useState("");
+
+  const [fourStarWarrantyQty, setFourStarWarrantyQty] = useState("");
+  const [fourStarWarrantyPrice, setFourStarWarrantyPrice] = useState("15");
+  const [fourStarWarrantyMaterialPrice, setFourStarWarrantyMaterialPrice] = useState("0");
+
   // Auto-fill underlayment with total sq + waste, rounded up to the nearest
   // 10 SQ since synthetic underlayment sells in 10 SQ rolls.
   useEffect(() => {
@@ -353,7 +365,6 @@ export default function EstimatorPage() {
   }, [totalWithWaste]);
 
   // ─── Raw line totals (bundle/roll ROUNDUP formulas match spreadsheet) ────
-  const landmarkProUpcharge = shingleType === "Landmark PRO" ? D.proUpcharge : 0;
 
   // Steep pitch adder — weighted by section squares (each increment above 8/12 = +$5/SQ)
   const totalSteepAdderPerSq = (() => {
@@ -372,7 +383,11 @@ export default function EstimatorPage() {
     qty * (materialPrice * (1 + materialTaxRate) + laborPrice);
 
   const shingleTotal      = costOf(num(shingleQty), num(shingleMaterialPrice), num(shinglePrice));
-  const landmarkProTotal  = num(shingleQty) * landmarkProUpcharge;
+  // Landmark PRO — its own line item. Price is derived, not independently
+  // set: material is always $20 more than the base Landmark material price
+  // above, labor is always the same rate as the base Landmark labor price.
+  const landmarkProMaterialPrice = num(shingleMaterialPrice) + D.proUpcharge;
+  const landmarkProTotal = costOf(num(landmarkProQty), landmarkProMaterialPrice, num(shinglePrice));
   // New construction shingle labor runs $25/SQ cheaper than a replacement
   // (no tear-off staging/cleanup) — the Labor $/unit field above always
   // holds the replacement rate; this discount is applied on top of it.
@@ -396,6 +411,7 @@ export default function EstimatorPage() {
   const ridgeVentTotal    = costOf(num(ridgeVentQty), num(ridgeVentMaterialPrice), num(ridgeVentPrice));
   const deckingTotal      = costOf(num(deckingQty), num(deckingMaterialPrice), num(deckingPrice));
   const flintlasticTotal  = costOf(roundUp(num(flintlasticQty)), num(flintlasticMaterialPrice), num(flintlasticPrice));
+  const fourStarWarrantyTotal = costOf(num(fourStarWarrantyQty), num(fourStarWarrantyMaterialPrice), num(fourStarWarrantyPrice));
 
   // Layers to Remove — tear-off surcharge: $30/SQ for each layer above the first,
   // applied across the total SQ with waste (all roof sections combined).
@@ -407,7 +423,7 @@ export default function EstimatorPage() {
   const A = shingleTotal + landmarkProTotal + newConstructionDiscountTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
     ridgeCapTotal + iceWaterTotal + dripEdgeTotal + stepFlashTotal +
     trimCoilTotal + pipeBootsTotal + chimneysTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
-    ridgeVentTotal + deckingTotal + flintlasticTotal + layersTotal + referralFee + MISC_AMOUNT;
+    ridgeVentTotal + deckingTotal + flintlasticTotal + fourStarWarrantyTotal + layersTotal + referralFee + MISC_AMOUNT;
   const B = A * markupRate;
   const E = A + B;
   // Commission is X% of Total Price: Total = E / (1 - rate), F = Total * rate
@@ -428,6 +444,12 @@ export default function EstimatorPage() {
   // Skylights are a one-off add-on, not part of the roof itself — exclude
   // their (marked-up) price from the per-square figure.
   const pricePerSq = totalSqForPrice > 0 ? (grandTotal - salesPrice(skylightsTotal)) / totalSqForPrice : 0;
+
+  // Auto-fill 4-Star Warranty qty with total SQ incl. hip/ridge & starter —
+  // matches how the warranty program itself measures a covered square.
+  useEffect(() => {
+    if (totalSqForPrice > 0) setFourStarWarrantyQty(totalSqForPrice.toFixed(2));
+  }, [totalSqForPrice]);
 
   // Proportional sales price: distributes markup + commission across raw cost
   // salesPrice(x) = (x / A) * grandTotal — all line prices sum to grandTotal
@@ -516,6 +538,7 @@ export default function EstimatorPage() {
     const iceWaterVal = b.leakBarrierFt ?? 0;
     const ridgeCapVal = b.ridgeCapFt ?? 0;
     const starterVal = b.starterFt ?? 0;
+    const ridgeVentVal = b.ridgesFt ?? 0;
 
     const shinglePriceV = num(priceDefaults?.shinglePricePerSq) || D.shingle;
     const shingleMatV = num(priceDefaults?.shingleMaterialPricePerSq);
@@ -529,6 +552,8 @@ export default function EstimatorPage() {
     const iceWaterMatV = num(priceDefaults?.iceWaterMaterialPricePerUnit);
     const dripEdgePriceV = num(priceDefaults?.dripEdgePricePerUnit) || (DE_PIECE_COST / DE_PIECE_LF);
     const dripEdgeMatV = num(priceDefaults?.dripEdgeMaterialPricePerUnit);
+    const ridgeVentPriceV = num(priceDefaults?.ventilationPricePerUnit) || (RV_PIECE_COST / RV_PIECE_LF);
+    const ridgeVentMatV = num(priceDefaults?.ventilationMaterialPricePerUnit);
 
     const cost = (qty: number, mat: number, labor: number) => qty * (mat + labor);
     const Av = cost(shingleQtyVal, shingleMatV, shinglePriceV)
@@ -537,6 +562,7 @@ export default function EstimatorPage() {
       + cost(ridgeCapVal, ridgeCapMatV, ridgeCapPriceV)
       + cost(iceWaterVal, iceWaterMatV, iceWaterPriceV)
       + cost(dripEdgeVal, dripEdgeMatV, dripEdgePriceV)
+      + cost(ridgeVentVal, ridgeVentMatV, ridgeVentPriceV)
       + MISC_AMOUNT;
     const grandTotalV = (Av + Av * DEFAULT_MARKUP_RATE) / (1 - COMMISSION_OFFICE);
 
@@ -574,6 +600,9 @@ export default function EstimatorPage() {
       dripEdgeColor: "White",
       dripEdgePricePerUnit: dripEdgePriceV,
       dripEdgeMaterialPricePerUnit: dripEdgeMatV,
+      ventilationQty: ridgeVentVal || null,
+      ventilationPricePerUnit: ridgeVentPriceV,
+      ventilationMaterialPricePerUnit: ridgeVentMatV,
       miscAmount: MISC_AMOUNT,
       subtotal: Av,
       totalWithMisc: grandTotalV,
@@ -598,6 +627,7 @@ export default function EstimatorPage() {
     if (summary.leakBarrierFt != null) setIceWaterQty(String(summary.leakBarrierFt));
     if (summary.ridgeCapFt != null) setRidgeCapQty(String(summary.ridgeCapFt));
     if (summary.starterFt != null) setStarterQty(String(summary.starterFt));
+    if (summary.ridgesFt != null) setRidgeVentQty(String(summary.ridgesFt));
     if (gafData.suggestedWastePercent != null) setWastePercent(String(gafData.suggestedWastePercent));
 
     const splitEntries = gafData.buildings
@@ -749,6 +779,8 @@ export default function EstimatorPage() {
     set(priceDefaults.deckingMaterialPricePerUnit, setDeckingMaterialPrice);
     set(priceDefaults.flintlasticPricePerUnit, setFlintlasticPrice);
     set(priceDefaults.flintlasticMaterialPricePerUnit, setFlintlasticMaterialPrice);
+    set(priceDefaults.fourStarWarrantyPricePerUnit, setFourStarWarrantyPrice);
+    set(priceDefaults.fourStarWarrantyMaterialPricePerUnit, setFourStarWarrantyMaterialPrice);
   }, [isNew, priceDefaults]);
 
   useEffect(() => {
@@ -823,6 +855,10 @@ export default function EstimatorPage() {
     setFlintlasticQty(String(existingEstimate.flintlasticQty ?? ""));
     setFlintlasticPrice(String(existingEstimate.flintlasticPricePerUnit ?? 301));
     setFlintlasticMaterialPrice(String(existingEstimate.flintlasticMaterialPricePerUnit ?? 0));
+    setLandmarkProQty(String(existingEstimate.landmarkProQty ?? ""));
+    setFourStarWarrantyQty(String(existingEstimate.fourStarWarrantyQty ?? ""));
+    setFourStarWarrantyPrice(String(existingEstimate.fourStarWarrantyPricePerUnit ?? 15));
+    setFourStarWarrantyMaterialPrice(String(existingEstimate.fourStarWarrantyMaterialPricePerUnit ?? 0));
     if (existingEstimate.referralFee === 100 || existingEstimate.referralFee === 200) {
       setReferralFee(existingEstimate.referralFee);
     } else {
@@ -864,7 +900,7 @@ export default function EstimatorPage() {
     shingleQty: num(shingleQty) || null,
     shinglePricePerSq: num(shinglePrice),
     shingleMaterialPricePerSq: num(shingleMaterialPrice),
-    landmarkProUpcharge,
+    landmarkProQty: num(landmarkProQty) || null,
     underlaymentQty: num(underlaymentQty) || null,
     underlaymentPricePerSq: num(underlaymentPrice),
     underlaymentMaterialPricePerSq: num(underlaymentMaterialPrice),
@@ -910,6 +946,9 @@ export default function EstimatorPage() {
     flintlasticQty: num(flintlasticQty) || null,
     flintlasticPricePerUnit: num(flintlasticPrice),
     flintlasticMaterialPricePerUnit: num(flintlasticMaterialPrice),
+    fourStarWarrantyQty: num(fourStarWarrantyQty) || null,
+    fourStarWarrantyPricePerUnit: num(fourStarWarrantyPrice),
+    fourStarWarrantyMaterialPricePerUnit: num(fourStarWarrantyMaterialPrice),
     referralFee: referralFee || null,
     referralName: referralName || null,
     miscAmount: MISC_AMOUNT,
@@ -957,9 +996,10 @@ export default function EstimatorPage() {
                 <GafReviewRow label="Ice & Water Shield (leak barrier)" value={summary.leakBarrierFt != null ? `${summary.leakBarrierFt.toLocaleString()} FT` : null} />
                 <GafReviewRow label="Hip & Ridge (ridge cap)" value={summary.ridgeCapFt != null ? `${summary.ridgeCapFt.toLocaleString()} FT` : null} />
                 <GafReviewRow label="Starter Strip" value={summary.starterFt != null ? `${summary.starterFt.toLocaleString()} FT` : null} />
+                <GafReviewRow label="Ridge Vent (ridges only, excl. hips)" value={summary.ridgesFt != null ? `${summary.ridgesFt.toLocaleString()} FT` : null} />
                 <GafReviewRow label="Waste %" value={gafData.suggestedWastePercent != null ? `${gafData.suggestedWastePercent}% (GAF suggested)` : null} />
                 <p className="text-xs text-muted-foreground pt-3">
-                  This will overwrite the Address field, Waste %, Section 1's squares/pitch, and the Drip Edge, Ice & Water, Hip & Ridge, and Starter Strip quantities above — all still editable afterward.
+                  This will overwrite the Address field, Waste %, Section 1's squares/pitch, and the Drip Edge, Ice & Water, Hip & Ridge, Starter Strip, and Ridge Vent quantities above — all still editable afterward.
                 </p>
                 {gafData.buildings.length > 1 && (
                   <div className="mt-3 pt-3 border-t border-border">
@@ -1244,6 +1284,8 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <SalesGroupLabel>Other</SalesGroupLabel>
               <SalesQtyRow label="Flintlastic" qty={flintlasticQty} setQty={setFlintlasticQty} unit="SQ" />
+              <SalesQtyRow label="Landmark PRO" qty={landmarkProQty} setQty={setLandmarkProQty} unit="SQ" />
+              <SalesQtyRow label="4-Star Warranty" qty={fourStarWarrantyQty} setQty={setFourStarWarrantyQty} unit="SQ" />
               {/* Decking: thickness + type selectors */}
               <div className="grid grid-cols-12 gap-2 items-center mb-1">
                 <div className="col-span-7 text-sm font-medium flex items-center gap-1 flex-wrap">
@@ -1509,9 +1551,6 @@ export default function EstimatorPage() {
                 </div>
               </div>
               <MLRow label={shingleType} qty={shingleQty} setQty={setShingleQty} unit="SQ" materialPrice={shingleMaterialPrice} setMaterialPrice={setShingleMaterialPrice} laborPrice={shinglePrice} setLaborPrice={setShinglePrice} total={shingleTotal} />
-              {shingleType === "Landmark PRO" && (
-                <ARow label="Landmark PRO (+$20/SQ)" qty={shingleQty} setQty={() => {}} unit="SQ" price={String(D.proUpcharge)} setPrice={() => {}} total={landmarkProTotal} readonlyQty readonlyPrice highlight />
-              )}
               {steepPitchAdderTotal > 0 && (
                 <ARow label={`Steep Pitch (+$${totalSteepAdderPerSq.toFixed(0)}/SQ)`} qty={shingleQty} setQty={() => {}} unit="SQ" price={totalSteepAdderPerSq.toFixed(2)} setPrice={() => {}} total={steepPitchAdderTotal} readonlyQty readonlyPrice highlight />
               )}
@@ -1646,6 +1685,8 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <GroupLabel>Other</GroupLabel>
               <MLRow label="Flintlastic" qty={String(roundUp(num(flintlasticQty)))} setQty={setFlintlasticQty} unit="SQ" materialPrice={flintlasticMaterialPrice} setMaterialPrice={setFlintlasticMaterialPrice} laborPrice={flintlasticPrice} setLaborPrice={setFlintlasticPrice} total={flintlasticTotal} />
+              <MLRow label="Landmark PRO" qty={landmarkProQty} setQty={setLandmarkProQty} unit="SQ" materialPrice={landmarkProMaterialPrice.toFixed(2)} setMaterialPrice={() => {}} laborPrice={shinglePrice} setLaborPrice={() => {}} total={landmarkProTotal} readonlyPrice />
+              <MLRow label="4-Star Warranty" qty={fourStarWarrantyQty} setQty={setFourStarWarrantyQty} unit="SQ" materialPrice={fourStarWarrantyMaterialPrice} setMaterialPrice={setFourStarWarrantyMaterialPrice} laborPrice={fourStarWarrantyPrice} setLaborPrice={setFourStarWarrantyPrice} total={fourStarWarrantyTotal} prefilled />
               {/* Decking with thickness + type selectors */}
               <MLRow
                 label={<>
@@ -1911,12 +1952,13 @@ interface MLRowProps {
   setLaborPrice: (v: string) => void;
   total: number;
   readonlyQty?: boolean;
+  readonlyPrice?: boolean;
   prefilled?: boolean;
 }
 
 // Material/Labor row — same as ARow but splits $/Unit into an editable
 // Material price (taxed by the estimate's Material Tax %) and Labor price.
-function MLRow({ label, qty, setQty, unit, materialPrice, setMaterialPrice, laborPrice, setLaborPrice, total, readonlyQty, prefilled }: MLRowProps) {
+function MLRow({ label, qty, setQty, unit, materialPrice, setMaterialPrice, laborPrice, setLaborPrice, total, readonlyQty, readonlyPrice, prefilled }: MLRowProps) {
   const hasVal = num(qty) > 0;
   return (
     <div className="mb-2 pb-2 border-b border-dashed border-border/60 last:border-0 last:mb-1 last:pb-0">
@@ -1935,11 +1977,13 @@ function MLRow({ label, qty, setQty, unit, materialPrice, setMaterialPrice, labo
       <div className="flex items-center gap-3 mt-1">
         <div className="flex items-center gap-1 flex-1 min-w-0">
           <span className="text-xs text-muted-foreground shrink-0">Material</span>
-          <Input type="number" min="0" step="0.01" value={materialPrice} onChange={e => setMaterialPrice(e.target.value)} placeholder="0.00" className="text-sm h-7" />
+          <Input type="number" min="0" step="0.01" value={materialPrice} onChange={e => !readonlyPrice && setMaterialPrice(e.target.value)}
+            placeholder="0.00" className={`text-sm h-7 ${readonlyPrice ? "bg-muted" : ""}`} readOnly={readonlyPrice} />
         </div>
         <div className="flex items-center gap-1 flex-1 min-w-0">
           <span className="text-xs text-muted-foreground shrink-0">Labor</span>
-          <Input type="number" min="0" step="0.01" value={laborPrice} onChange={e => setLaborPrice(e.target.value)} placeholder="0.00" className="text-sm h-7" />
+          <Input type="number" min="0" step="0.01" value={laborPrice} onChange={e => !readonlyPrice && setLaborPrice(e.target.value)}
+            placeholder="0.00" className={`text-sm h-7 ${readonlyPrice ? "bg-muted" : ""}`} readOnly={readonlyPrice} />
         </div>
       </div>
     </div>

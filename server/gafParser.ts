@@ -43,6 +43,9 @@ export interface GafBuildingData {
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
+  // Ridges only, excluding hips — Ridge Cap combines both (hip & ridge cap
+  // shingles cover the same run), but ridge vent only sits along ridges.
+  ridgesFt: number | null;
 }
 
 function extractNumber(text: string, label: string, unit: string): number | null {
@@ -129,6 +132,7 @@ function extractBuildings(text: string): GafBuildingData[] {
   const leakBarriers = extractBuildingValues(section, "Leak Barrier", "ft");
   const ridgeCaps = extractBuildingValues(section, "Ridge Cap", "ft");
   const starters = extractBuildingValues(section, "Starter", "ft");
+  const ridges = extractBuildingValues(section, "Ridges", "ft");
   return roofAreas.map((roofAreaSqFt, i) => ({
     roofAreaSqFt,
     pitch: pitches[i] ?? null,
@@ -136,6 +140,7 @@ function extractBuildings(text: string): GafBuildingData[] {
     leakBarrierFt: leakBarriers[i] ?? null,
     ridgeCapFt: ridgeCaps[i] ?? null,
     starterFt: starters[i] ?? null,
+    ridgesFt: ridges[i] ?? null,
   }));
 }
 
