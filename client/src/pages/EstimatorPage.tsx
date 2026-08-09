@@ -160,7 +160,8 @@ const CHIMNEY_PRICES: Record<"small" | "average" | "large", number> = { small: 2
 
 function fmt(v: number) {
   if (!v || v === 0) return "—";
-  return "$" + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const sign = v < 0 ? "-" : "";
+  return sign + "$" + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 function fmtBig(v: number) {
   return "$" + (v || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -372,6 +373,11 @@ export default function EstimatorPage() {
 
   const shingleTotal      = costOf(num(shingleQty), num(shingleMaterialPrice), num(shinglePrice));
   const landmarkProTotal  = num(shingleQty) * landmarkProUpcharge;
+  // New construction shingle labor runs $25/SQ cheaper than a replacement
+  // (no tear-off staging/cleanup) — the Labor $/unit field above always
+  // holds the replacement rate; this discount is applied on top of it.
+  const newConstructionDiscountPerSq = constructionType === "new_construction" ? -25 : 0;
+  const newConstructionDiscountTotal = num(shingleQty) * newConstructionDiscountPerSq;
   const underlayTotal     = costOf(num(underlaymentQty), num(underlaymentMaterialPrice), num(underlaymentPrice));
   const starterTotal      = costOf(num(starterQty), num(starterMaterialPrice), num(starterPrice));
   const ridgeCapTotal     = costOf(num(ridgeCapQty), num(ridgeCapMaterialPrice), num(ridgeCapPrice));
@@ -398,7 +404,7 @@ export default function EstimatorPage() {
   const layersTotal = totalWithWaste * layersRate;
 
   // ─── Markup model ─────────────────────────────────────────────────────────
-  const A = shingleTotal + landmarkProTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
+  const A = shingleTotal + landmarkProTotal + newConstructionDiscountTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
     ridgeCapTotal + iceWaterTotal + dripEdgeTotal + stepFlashTotal +
     trimCoilTotal + pipeBootsTotal + chimneysTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
     ridgeVentTotal + deckingTotal + flintlasticTotal + layersTotal + referralFee + MISC_AMOUNT;
@@ -1508,6 +1514,9 @@ export default function EstimatorPage() {
               )}
               {steepPitchAdderTotal > 0 && (
                 <ARow label={`Steep Pitch (+$${totalSteepAdderPerSq.toFixed(0)}/SQ)`} qty={shingleQty} setQty={() => {}} unit="SQ" price={totalSteepAdderPerSq.toFixed(2)} setPrice={() => {}} total={steepPitchAdderTotal} readonlyQty readonlyPrice highlight />
+              )}
+              {constructionType === "new_construction" && (
+                <ARow label="New Construction Labor (-$25/SQ)" qty={shingleQty} setQty={() => {}} unit="SQ" price={newConstructionDiscountPerSq.toFixed(2)} setPrice={() => {}} total={newConstructionDiscountTotal} readonlyQty readonlyPrice highlight />
               )}
               {layersTotal > 0 && (
                 <ARow label={`Layers to Remove (${layersToRemove}) +$${layersRate.toFixed(0)}/SQ`} qty={String(totalWithWaste)} setQty={() => {}} unit="SQ" price={layersRate.toFixed(2)} setPrice={() => {}} total={layersTotal} readonlyQty readonlyPrice highlight />
