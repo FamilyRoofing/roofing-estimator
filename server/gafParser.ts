@@ -27,6 +27,7 @@ export interface GafReportData {
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
+  suggestedWastePercent: number | null;
   // Per-structure breakdown from the report's "Buildings" page — only
   // populated (length >= 2) when the report covers more than one roof
   // structure (e.g. a house plus a detached garage). Empty otherwise.
@@ -92,6 +93,18 @@ function extractBuildingValues(section: string, label: string, unit: string): nu
   return values;
 }
 
+// The Summary page shows a "Waste" row with 7 possible waste percentages
+// (e.g. "Waste 0% 10% 13% 15% 17% 20% 25%") and visually boxes one of them
+// as GAF's complexity-based "Suggested" factor. That box is a highlight
+// with no adjacent text, so it can't be read directly — but across every
+// sample report checked, the boxed value is always the exact middle (4th
+// of 7) entry, so we rely on that position instead.
+function extractSuggestedWastePercent(text: string): number | null {
+  const values = extractBuildingValues(text, "Waste", "%");
+  if (values.length === 0) return null;
+  return values[Math.floor(values.length / 2)];
+}
+
 // Pitch pairs don't fit the "value unit" shape ("Pitch 6 / 12 7 / 12"), so
 // they get their own extractor.
 function extractBuildingPitches(section: string): string[] {
@@ -142,6 +155,7 @@ export function parseGafReport(text: string): GafReportData {
     leakBarrierFt: extractNumber(text, "Leak Barrier", "ft"),
     ridgeCapFt: extractNumber(text, "Ridge Cap", "ft"),
     starterFt: extractNumber(text, "Starter", "ft"),
+    suggestedWastePercent: extractSuggestedWastePercent(text),
     buildings: extractBuildings(text),
   };
 }

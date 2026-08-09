@@ -40,6 +40,7 @@ interface GafReportData {
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
+  suggestedWastePercent: number | null;
   buildings: GafBuildingData[];
 }
 
@@ -591,6 +592,7 @@ export default function EstimatorPage() {
     if (summary.leakBarrierFt != null) setIceWaterQty(String(summary.leakBarrierFt));
     if (summary.ridgeCapFt != null) setRidgeCapQty(String(summary.ridgeCapFt));
     if (summary.starterFt != null) setStarterQty(String(summary.starterFt));
+    if (gafData.suggestedWastePercent != null) setWastePercent(String(gafData.suggestedWastePercent));
 
     const splitEntries = gafData.buildings
       .map((b, i) => ({ b, i }))
@@ -949,8 +951,9 @@ export default function EstimatorPage() {
                 <GafReviewRow label="Ice & Water Shield (leak barrier)" value={summary.leakBarrierFt != null ? `${summary.leakBarrierFt.toLocaleString()} FT` : null} />
                 <GafReviewRow label="Hip & Ridge (ridge cap)" value={summary.ridgeCapFt != null ? `${summary.ridgeCapFt.toLocaleString()} FT` : null} />
                 <GafReviewRow label="Starter Strip" value={summary.starterFt != null ? `${summary.starterFt.toLocaleString()} FT` : null} />
+                <GafReviewRow label="Waste %" value={gafData.suggestedWastePercent != null ? `${gafData.suggestedWastePercent}% (GAF suggested)` : null} />
                 <p className="text-xs text-muted-foreground pt-3">
-                  Waste % isn't set automatically — the report's suggested waste factor can't be read reliably from the PDF, so double-check it manually. This will overwrite the Address field, Section 1's squares/pitch, and the Drip Edge, Ice & Water, Hip & Ridge, and Starter Strip quantities above.
+                  This will overwrite the Address field, Waste %, Section 1's squares/pitch, and the Drip Edge, Ice & Water, Hip & Ridge, and Starter Strip quantities above — all still editable afterward.
                 </p>
                 {gafData.buildings.length > 1 && (
                   <div className="mt-3 pt-3 border-t border-border">
