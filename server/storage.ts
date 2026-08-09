@@ -170,6 +170,7 @@ _addCol("solar_vents_material_price_per_unit", "REAL");
 _addCol("ventilation_material_price_per_unit", "REAL");
 _addCol("decking_material_price_per_unit", "REAL");
 _addCol("flintlastic_material_price_per_unit", "REAL");
+_addCol("construction_type", "TEXT DEFAULT 'reroof'");
 
 // ─── Seed / secure default admin account ───────────────────────────────────────
 // Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a

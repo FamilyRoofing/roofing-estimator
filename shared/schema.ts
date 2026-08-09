@@ -37,6 +37,10 @@ export const estimates = sqliteTable("estimates", {
   totalSquaresWithWaste: real("total_squares_with_waste"),
   // Material Tax % — applied to every material price below (labor is untaxed)
   materialTaxRate: real("material_tax_rate").default(0),
+  // Construction Type — "reroof" | "new_construction". Tear-off surcharge
+  // (layersToRemove) only applies to reroofs; new construction has no
+  // existing layers to remove.
+  constructionType: text("construction_type").default("reroof"),
   // Layers to Remove (tear-off surcharge: $30/SQ per layer above 1)
   layersToRemove: real("layers_to_remove").default(1),
   layersQty: real("layers_qty"),

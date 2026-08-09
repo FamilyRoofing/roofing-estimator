@@ -146,6 +146,10 @@ const D = {
   decking:      40.00,   // 25+15
 };
 
+const CONSTRUCTION_TYPES: { value: "reroof" | "new_construction"; label: string }[] = [
+  { value: "reroof", label: "Replacement" },
+  { value: "new_construction", label: "New Construction" },
+];
 const CHIMNEY_SIZES: { value: "small" | "average" | "large"; label: string }[] = [
   { value: "small",   label: "Small (up to 24\"x24\")" },
   { value: "average", label: "Average (up to 24\"x48\")" },
@@ -251,6 +255,7 @@ export default function EstimatorPage() {
   // Roof sections
   const [sections, setSections] = useState([{ squares: "", pitch: "6/12" }]);
   const [wastePercent, setWastePercent] = useState("15");
+  const [constructionType, setConstructionType] = useState<"reroof" | "new_construction">("reroof");
   const [layersToRemove, setLayersToRemove] = useState("1");
 
   const totalRawSq = sections.reduce((s, sec) => s + num(sec.squares), 0);
@@ -387,7 +392,8 @@ export default function EstimatorPage() {
 
   // Layers to Remove — tear-off surcharge: $30/SQ for each layer above the first,
   // applied across the total SQ with waste (all roof sections combined).
-  const layersRate  = 30 * Math.max(0, num(layersToRemove) - 1);
+  // Doesn't apply to new construction — there's nothing to tear off.
+  const layersRate  = constructionType === "reroof" ? 30 * Math.max(0, num(layersToRemove) - 1) : 0;
   const layersTotal = totalWithWaste * layersRate;
 
   // ─── Markup model ─────────────────────────────────────────────────────────
@@ -746,6 +752,7 @@ export default function EstimatorPage() {
     setNotes(existingEstimate.notes || "");
     setWastePercent(String(existingEstimate.wastePercent ?? 15));
     setMaterialTaxRateInput(String(existingEstimate.materialTaxRate ?? 0));
+    setConstructionType(existingEstimate.constructionType === "new_construction" ? "new_construction" : "reroof");
     setLayersToRemove(String(existingEstimate.layersToRemove ?? 1));
     setShingleType(existingEstimate.shingleType || "Landmark");
     setShingleColor(existingEstimate.shingleColor || "");
@@ -841,6 +848,7 @@ export default function EstimatorPage() {
     totalSquares: totalRawSq,
     totalSquaresWithWaste: totalWithWaste,
     materialTaxRate: num(materialTaxRateInput) || 0,
+    constructionType,
     layersToRemove: num(layersToRemove) || 1,
     layersQty: totalWithWaste || null,
     layersPricePerUnit: layersRate,
@@ -1067,15 +1075,24 @@ export default function EstimatorPage() {
               ))}
               <Separator className="my-3" />
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex items-center gap-2">
                     <Label className="text-xs whitespace-nowrap">Waste %</Label>
                     <Input type="number" min="0" max="50" value={wastePercent} onChange={e => setWastePercent(e.target.value)} className="text-sm w-16" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs whitespace-nowrap">Layers to Remove</Label>
-                    <Input type="number" min="1" step="1" value={layersToRemove} onChange={e => setLayersToRemove(e.target.value)} className="text-sm w-16" />
+                    <Label className="text-xs whitespace-nowrap">Construction</Label>
+                    <Select value={constructionType} onValueChange={v => setConstructionType(v as "reroof" | "new_construction")}>
+                      <SelectTrigger className="text-sm w-40 h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>{CONSTRUCTION_TYPES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                    </Select>
                   </div>
+                  {constructionType === "reroof" && (
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs whitespace-nowrap">Number of Layers</Label>
+                      <Input type="number" min="1" step="1" value={layersToRemove} onChange={e => setLayersToRemove(e.target.value)} className="text-sm w-16" />
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between"><span className="text-muted-foreground">Raw SQ:</span><span className="font-semibold">{totalRawSq.toFixed(2)}</span></div>
@@ -1437,15 +1454,24 @@ export default function EstimatorPage() {
               ))}
               <Separator className="my-3" />
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex items-center gap-2">
                     <Label className="text-xs whitespace-nowrap">Waste %</Label>
                     <Input type="number" min="0" max="50" value={wastePercent} onChange={e => setWastePercent(e.target.value)} className="text-sm w-16" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs whitespace-nowrap">Layers to Remove</Label>
-                    <Input type="number" min="1" step="1" value={layersToRemove} onChange={e => setLayersToRemove(e.target.value)} className="text-sm w-16" />
+                    <Label className="text-xs whitespace-nowrap">Construction</Label>
+                    <Select value={constructionType} onValueChange={v => setConstructionType(v as "reroof" | "new_construction")}>
+                      <SelectTrigger className="text-sm w-40 h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>{CONSTRUCTION_TYPES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                    </Select>
                   </div>
+                  {constructionType === "reroof" && (
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs whitespace-nowrap">Number of Layers</Label>
+                      <Input type="number" min="1" step="1" value={layersToRemove} onChange={e => setLayersToRemove(e.target.value)} className="text-sm w-16" />
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between"><span className="text-muted-foreground">Raw SQ:</span><span className="font-semibold">{totalRawSq.toFixed(2)}</span></div>
