@@ -27,6 +27,7 @@ export interface GafReportData {
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
+  stepFt: number | null;
   suggestedWastePercent: number | null;
   // Per-structure breakdown from the report's "Buildings" page — only
   // populated (length >= 2) when the report covers more than one roof
@@ -46,6 +47,8 @@ export interface GafBuildingData {
   // Ridges only, excluding hips — Ridge Cap combines both (hip & ridge cap
   // shingles cover the same run), but ridge vent only sits along ridges.
   ridgesFt: number | null;
+  valleysFt: number | null;
+  stepFt: number | null;
 }
 
 function extractNumber(text: string, label: string, unit: string): number | null {
@@ -133,6 +136,8 @@ function extractBuildings(text: string): GafBuildingData[] {
   const ridgeCaps = extractBuildingValues(section, "Ridge Cap", "ft");
   const starters = extractBuildingValues(section, "Starter", "ft");
   const ridges = extractBuildingValues(section, "Ridges", "ft");
+  const valleys = extractBuildingValues(section, "Valleys", "ft");
+  const steps = extractBuildingValues(section, "Step", "ft");
   return roofAreas.map((roofAreaSqFt, i) => ({
     roofAreaSqFt,
     pitch: pitches[i] ?? null,
@@ -141,6 +146,8 @@ function extractBuildings(text: string): GafBuildingData[] {
     ridgeCapFt: ridgeCaps[i] ?? null,
     starterFt: starters[i] ?? null,
     ridgesFt: ridges[i] ?? null,
+    valleysFt: valleys[i] ?? null,
+    stepFt: steps[i] ?? null,
   }));
 }
 
@@ -160,6 +167,7 @@ export function parseGafReport(text: string): GafReportData {
     leakBarrierFt: extractNumber(text, "Leak Barrier", "ft"),
     ridgeCapFt: extractNumber(text, "Ridge Cap", "ft"),
     starterFt: extractNumber(text, "Starter", "ft"),
+    stepFt: extractNumber(text, "Step", "ft"),
     suggestedWastePercent: extractSuggestedWastePercent(text),
     buildings: extractBuildings(text),
   };

@@ -26,6 +26,8 @@ interface GafBuildingData {
   ridgeCapFt: number | null;
   starterFt: number | null;
   ridgesFt: number | null;
+  valleysFt: number | null;
+  stepFt: number | null;
 }
 interface GafReportData {
   address: string | null;
@@ -41,6 +43,7 @@ interface GafReportData {
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
+  stepFt: number | null;
   suggestedWastePercent: number | null;
   buildings: GafBuildingData[];
 }
@@ -53,12 +56,13 @@ interface GafReportData {
 function summarizeGafBuildings(data: GafReportData, excluded: Set<number>): {
   roofAreaSqFt: number | null; pitch: string | null; dripEdgeFt: number | null;
   leakBarrierFt: number | null; ridgeCapFt: number | null; starterFt: number | null; ridgesFt: number | null;
+  valleysFt: number | null; stepFt: number | null;
 } {
   if (data.buildings.length === 0 || excluded.size === 0) {
     return {
       roofAreaSqFt: data.roofAreaSqFt, pitch: data.pitch, dripEdgeFt: data.dripEdgeFt,
       leakBarrierFt: data.leakBarrierFt, ridgeCapFt: data.ridgeCapFt, starterFt: data.starterFt,
-      ridgesFt: data.ridgesFt,
+      ridgesFt: data.ridgesFt, valleysFt: data.valleysFt, stepFt: data.stepFt,
     };
   }
   const included = data.buildings.filter((_, i) => !excluded.has(i));
@@ -72,6 +76,8 @@ function summarizeGafBuildings(data: GafReportData, excluded: Set<number>): {
     ridgeCapFt: included.length ? sum("ridgeCapFt") : null,
     starterFt: included.length ? sum("starterFt") : null,
     ridgesFt: included.length ? sum("ridgesFt") : null,
+    valleysFt: included.length ? sum("valleysFt") : null,
+    stepFt: included.length ? sum("stepFt") : null,
   };
 }
 
@@ -535,7 +541,7 @@ export default function EstimatorPage() {
     const shingleQtyVal = sqWithWaste;
     const underlaymentQtyVal = roundUpToTen(sqWithWaste);
     const dripEdgeVal = b.dripEdgeFt ?? 0;
-    const iceWaterVal = b.leakBarrierFt ?? 0;
+    const iceWaterVal = (b.stepFt ?? 0) + (b.valleysFt ?? 0);
     const ridgeCapVal = b.ridgeCapFt ?? 0;
     const starterVal = b.starterFt ?? 0;
     const ridgeVentVal = b.ridgesFt ?? 0;
@@ -624,7 +630,11 @@ export default function EstimatorPage() {
       });
     }
     if (summary.dripEdgeFt != null) setDripEdgeQty(String(summary.dripEdgeFt));
-    if (summary.leakBarrierFt != null) setIceWaterQty(String(summary.leakBarrierFt));
+    // Ice & Water Shield coverage is step flashing + valleys, not the
+    // report's generic "Leak Barrier" figure.
+    if (summary.stepFt != null || summary.valleysFt != null) {
+      setIceWaterQty(String((summary.stepFt ?? 0) + (summary.valleysFt ?? 0)));
+    }
     if (summary.ridgeCapFt != null) setRidgeCapQty(String(summary.ridgeCapFt));
     if (summary.starterFt != null) setStarterQty(String(summary.starterFt));
     if (summary.ridgesFt != null) setRidgeVentQty(String(summary.ridgesFt));
@@ -993,7 +1003,7 @@ export default function EstimatorPage() {
                 <GafReviewRow label="Squares (Roof Area)" value={summary.roofAreaSqFt != null ? `${(summary.roofAreaSqFt / 100).toFixed(2)} SQ (${summary.roofAreaSqFt.toLocaleString()} sq ft)` : null} />
                 <GafReviewRow label="Pitch" value={summary.pitch} />
                 <GafReviewRow label="Drip Edge (eaves + rakes)" value={summary.dripEdgeFt != null ? `${summary.dripEdgeFt.toLocaleString()} FT` : null} />
-                <GafReviewRow label="Ice & Water Shield (leak barrier)" value={summary.leakBarrierFt != null ? `${summary.leakBarrierFt.toLocaleString()} FT` : null} />
+                <GafReviewRow label="Ice & Water Shield (step + valleys)" value={(summary.stepFt != null || summary.valleysFt != null) ? `${((summary.stepFt ?? 0) + (summary.valleysFt ?? 0)).toLocaleString()} FT` : null} />
                 <GafReviewRow label="Hip & Ridge (ridge cap)" value={summary.ridgeCapFt != null ? `${summary.ridgeCapFt.toLocaleString()} FT` : null} />
                 <GafReviewRow label="Starter Strip" value={summary.starterFt != null ? `${summary.starterFt.toLocaleString()} FT` : null} />
                 <GafReviewRow label="Ridge Vent (ridges only, excl. hips)" value={summary.ridgesFt != null ? `${summary.ridgesFt.toLocaleString()} FT` : null} />
