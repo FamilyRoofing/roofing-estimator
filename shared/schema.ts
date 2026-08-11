@@ -53,8 +53,10 @@ export const estimates = sqliteTable("estimates", {
   shingleMaterialPricePerSq: real("shingle_material_price_per_sq"),
   landmarkProUpcharge: real("landmark_pro_upcharge"), // retired — kept for old estimates
   landmarkProQty: real("landmark_pro_qty"), // retired — kept for old estimates
-  // Landmark PRO — always-on bottom-of-report add-on (see Estimator page):
-  // qty is always totalWithWaste, not stored; only the $/SQ rate is.
+  // Landmark PRO — bottom-of-report add-on (see Estimator page): qty is
+  // always totalWithWaste, not stored. Only counts toward the total when
+  // includeLandmarkPro is true.
+  includeLandmarkPro: integer("include_landmark_pro", { mode: "boolean" }).default(false),
   landmarkProPricePerUnit: real("landmark_pro_price_per_unit"),
   // Synthetic Underlayment
   underlaymentQty: real("underlayment_qty"),
@@ -127,9 +129,10 @@ export const estimates = sqliteTable("estimates", {
   flintlasticMaterialPricePerUnit: real("flintlastic_material_price_per_unit"),
   fourStarWarrantyQty: real("four_star_warranty_qty"), // retired — kept for old estimates
   fourStarWarrantyMaterialPricePerUnit: real("four_star_warranty_material_price_per_unit"), // retired — kept for old estimates
-  // 4-Star Warranty — always-on bottom-of-report add-on (see Estimator
-  // page): qty is always totalSqForPrice (incl. hip/ridge + starter), not
-  // stored; only the $/SQ rate is.
+  // 4-Star Warranty — bottom-of-report add-on (see Estimator page): qty is
+  // always totalSqForPrice (incl. hip/ridge + starter), not stored. Only
+  // counts toward the total when includeFourStarWarranty is true.
+  includeFourStarWarranty: integer("include_four_star_warranty", { mode: "boolean" }).default(false),
   fourStarWarrantyPricePerUnit: real("four_star_warranty_price_per_unit"),
   // Labor
   laborQty: real("labor_qty"),

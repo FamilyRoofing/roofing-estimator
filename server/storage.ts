@@ -179,6 +179,8 @@ _addCol("price_defaults", "four_star_warranty_price_per_unit", "REAL");
 _addCol("price_defaults", "four_star_warranty_material_price_per_unit", "REAL");
 _addCol("estimates", "landmark_pro_price_per_unit", "REAL");
 _addCol("price_defaults", "landmark_pro_price_per_unit", "REAL");
+_addCol("estimates", "include_landmark_pro", "INTEGER DEFAULT 0");
+_addCol("estimates", "include_four_star_warranty", "INTEGER DEFAULT 0");
 
 // ─── Seed / secure default admin account ───────────────────────────────────────
 // Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a

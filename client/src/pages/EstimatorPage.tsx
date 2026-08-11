@@ -353,9 +353,11 @@ export default function EstimatorPage() {
   // Landmark PRO and 4-Star Warranty — bottom-of-report add-ons, not editable
   // materials-list line items. Quantity is always derived (never entered):
   // Landmark PRO = total shingle SQ incl. waste; 4-Star Warranty = that same
-  // figure plus starter & hip/ridge (i.e. totalSqForPrice, below). Only the
-  // $/SQ rate is editable — set it to $0 to exclude one from a job.
+  // figure plus starter & hip/ridge (i.e. totalSqForPrice, below). Rate is
+  // editable, but neither counts toward the total unless explicitly selected.
+  const [includeLandmarkPro, setIncludeLandmarkPro] = useState(false);
   const [landmarkProPrice, setLandmarkProPrice] = useState("15");
+  const [includeFourStarWarranty, setIncludeFourStarWarranty] = useState(false);
   const [fourStarWarrantyPrice, setFourStarWarrantyPrice] = useState("15");
 
   // Auto-fill underlayment with total sq + waste, rounded up to the nearest
@@ -397,13 +399,13 @@ export default function EstimatorPage() {
   const totalSqForPrice = totalWithWaste + accessorySq;
 
   const shingleTotal      = costOf(num(shingleQty), num(shingleMaterialPrice), num(shinglePrice));
-  // Landmark PRO — always-on bottom-of-report add-on: total shingle SQ incl.
-  // waste × its own $/SQ rate (no material/labor split — set the rate to $0
-  // to exclude it from a job).
-  const landmarkProTotal = costOf(totalWithWaste, 0, num(landmarkProPrice));
+  // Landmark PRO — bottom-of-report add-on: total shingle SQ incl. waste ×
+  // its own $/SQ rate (no material/labor split). Only counts toward the
+  // total when explicitly selected below.
+  const landmarkProTotal = includeLandmarkPro ? costOf(totalWithWaste, 0, num(landmarkProPrice)) : 0;
   // 4-Star Warranty — same idea, but based on totalSqForPrice (incl. starter
   // & hip/ridge) since that's how the warranty program measures a square.
-  const fourStarWarrantyTotal = costOf(totalSqForPrice, 0, num(fourStarWarrantyPrice));
+  const fourStarWarrantyTotal = includeFourStarWarranty ? costOf(totalSqForPrice, 0, num(fourStarWarrantyPrice)) : 0;
   // New construction shingle labor runs $25/SQ cheaper than a replacement
   // (no tear-off staging/cleanup) — the Labor $/unit field above always
   // holds the replacement rate; this discount is applied on top of it.
@@ -868,7 +870,9 @@ export default function EstimatorPage() {
     setFlintlasticQty(String(existingEstimate.flintlasticQty ?? ""));
     setFlintlasticPrice(String(existingEstimate.flintlasticPricePerUnit ?? 301));
     setFlintlasticMaterialPrice(String(existingEstimate.flintlasticMaterialPricePerUnit ?? 0));
+    setIncludeLandmarkPro(!!existingEstimate.includeLandmarkPro);
     setLandmarkProPrice(String(existingEstimate.landmarkProPricePerUnit ?? 15));
+    setIncludeFourStarWarranty(!!existingEstimate.includeFourStarWarranty);
     setFourStarWarrantyPrice(String(existingEstimate.fourStarWarrantyPricePerUnit ?? 15));
     if (existingEstimate.referralFee === 100 || existingEstimate.referralFee === 200) {
       setReferralFee(existingEstimate.referralFee);
@@ -911,6 +915,7 @@ export default function EstimatorPage() {
     shingleQty: num(shingleQty) || null,
     shinglePricePerSq: num(shinglePrice),
     shingleMaterialPricePerSq: num(shingleMaterialPrice),
+    includeLandmarkPro,
     landmarkProPricePerUnit: num(landmarkProPrice),
     underlaymentQty: num(underlaymentQty) || null,
     underlaymentPricePerSq: num(underlaymentPrice),
@@ -957,6 +962,7 @@ export default function EstimatorPage() {
     flintlasticQty: num(flintlasticQty) || null,
     flintlasticPricePerUnit: num(flintlasticPrice),
     flintlasticMaterialPricePerUnit: num(flintlasticMaterialPrice),
+    includeFourStarWarranty,
     fourStarWarrantyPricePerUnit: num(fourStarWarrantyPrice),
     referralFee: referralFee || null,
     referralName: referralName || null,
@@ -1381,6 +1387,17 @@ export default function EstimatorPage() {
                   <span className="text-lg font-bold text-foreground">{fmtBig(baseTotal)}</span>
                 </div>
 
+                {/* Price per SQ */}
+                <div className="flex items-center justify-between px-4 py-2 border border-border rounded-lg">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Price per Square</div>
+                    <div className="text-xs text-muted-foreground">{totalSqForPrice.toFixed(2)} SQ (incl. starter & hip/ridge)</div>
+                  </div>
+                  <span className="text-lg font-bold text-foreground" data-testid="sales-price-per-sq">
+                    {pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}
+                  </span>
+                </div>
+
                 {/* Optional Add-Ons — Drip Edge, Landmark PRO, 4-Star Warranty & Skylights, same markup/commission rates as the base roof */}
                 {(dripEdgeTotal > 0 || totalWithWaste > 0 || skylights.length > 0) && (
                   <div className="border border-primary/30 rounded-lg p-3 space-y-2">
@@ -1397,8 +1414,11 @@ export default function EstimatorPage() {
                     {totalWithWaste > 0 && (
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-sm font-semibold text-foreground">Landmark PRO</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                          <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                            <Checkbox checked={includeLandmarkPro} onCheckedChange={v => setIncludeLandmarkPro(!!v)} />
+                            Landmark PRO
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap pl-6">
                             <span>{totalWithWaste.toFixed(2)} SQ × $</span>
                             <Input type="number" min="0" step="0.01" value={landmarkProPrice} onChange={e => setLandmarkProPrice(e.target.value)} className="h-6 w-16 text-xs px-1" />
                             <span>/SQ · commission {fmtBig(itemCommission(landmarkProTotal))}</span>
@@ -1410,8 +1430,11 @@ export default function EstimatorPage() {
                     {totalWithWaste > 0 && (
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-sm font-semibold text-foreground">4-Star Warranty</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                          <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                            <Checkbox checked={includeFourStarWarranty} onCheckedChange={v => setIncludeFourStarWarranty(!!v)} />
+                            4-Star Warranty
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap pl-6">
                             <span>{totalSqForPrice.toFixed(2)} SQ × $</span>
                             <Input type="number" min="0" step="0.01" value={fourStarWarrantyPrice} onChange={e => setFourStarWarrantyPrice(e.target.value)} className="h-6 w-16 text-xs px-1" />
                             <span>/SQ · commission {fmtBig(itemCommission(fourStarWarrantyTotal))}</span>
@@ -1457,17 +1480,6 @@ export default function EstimatorPage() {
                     </div>
                   </div>
                   <span className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="sales-commission">{fmtBig(F)}</span>
-                </div>
-
-                {/* Price per SQ */}
-                <div className="flex items-center justify-between px-4 py-2 border border-border rounded-lg">
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">Price per Square</div>
-                    <div className="text-xs text-muted-foreground">{totalSqForPrice.toFixed(2)} SQ (incl. starter & hip/ridge)</div>
-                  </div>
-                  <span className="text-lg font-bold text-foreground" data-testid="sales-price-per-sq">
-                    {pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}
-                  </span>
                 </div>
               </div>
             </div>
@@ -1833,7 +1845,6 @@ export default function EstimatorPage() {
                   <span>F — Commission ({leadType === "office" ? "10%" : "14%"} of Total)</span>
                   <span className="font-semibold">{fmtBig(F)}</span>
                 </div>
-                <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
               </div>
 
               {(dripEdgeTotal > 0 || totalWithWaste > 0 || skylights.length > 0) && (
@@ -1842,6 +1853,7 @@ export default function EstimatorPage() {
                   <div className="text-xs font-bold text-primary uppercase tracking-wide mb-2">Base Roof vs. Optional Add-Ons</div>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Base Roof — Total Price</span><span className="font-semibold">{fmtBig(baseTotal)}</span></div>
+                    <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
                     <div className="flex justify-between text-green-700 dark:text-green-400"><span className="text-xs">Base Roof — Commission</span><span className="font-semibold">{fmtBig(baseCommission)}</span></div>
                     <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Add-Ons (Drip Edge, Landmark PRO, 4-Star Warranty, Skylights) — Total Price</span><span className="font-semibold">{fmtBig(addOnsTotal)}</span></div>
                     {dripEdgeTotal > 0 && (
@@ -1853,7 +1865,8 @@ export default function EstimatorPage() {
                     {totalWithWaste > 0 && (
                       <div className="flex justify-between items-center text-xs text-muted-foreground pl-3 gap-2">
                         <span className="flex items-center gap-1 flex-wrap">
-                          — Landmark PRO ({totalWithWaste.toFixed(2)} SQ × $
+                          <Checkbox checked={includeLandmarkPro} onCheckedChange={v => setIncludeLandmarkPro(!!v)} className="mr-1" />
+                          Landmark PRO ({totalWithWaste.toFixed(2)} SQ × $
                           <Input type="number" min="0" step="0.01" value={landmarkProPrice} onChange={e => setLandmarkProPrice(e.target.value)} className="h-5 w-14 text-xs px-1 inline-block" />
                           /SQ)
                         </span>
@@ -1863,7 +1876,8 @@ export default function EstimatorPage() {
                     {totalWithWaste > 0 && (
                       <div className="flex justify-between items-center text-xs text-muted-foreground pl-3 gap-2">
                         <span className="flex items-center gap-1 flex-wrap">
-                          — 4-Star Warranty ({totalSqForPrice.toFixed(2)} SQ × $
+                          <Checkbox checked={includeFourStarWarranty} onCheckedChange={v => setIncludeFourStarWarranty(!!v)} className="mr-1" />
+                          4-Star Warranty ({totalSqForPrice.toFixed(2)} SQ × $
                           <Input type="number" min="0" step="0.01" value={fourStarWarrantyPrice} onChange={e => setFourStarWarrantyPrice(e.target.value)} className="h-5 w-14 text-xs px-1 inline-block" />
                           /SQ)
                         </span>
