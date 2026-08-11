@@ -442,20 +442,6 @@ export default function EstimatorPage() {
   // read than "% of cost" for a margin check.
   const marginDollar = grandTotal - A - F;
   const marginPercent = grandTotal > 0 ? (marginDollar / grandTotal) * 100 : 0;
-  // Price per SQ denominator includes starter & hip & ridge bundles (3 bundles = 1 SQ)
-  const starterBundles  = roundUp(num(starterQty) / ST_BUNDLE_LF);
-  const hipRidgeBundles = roundUp(num(ridgeCapQty) / HR_BUNDLE_LF);
-  const accessorySq     = (starterBundles + hipRidgeBundles) / 3;
-  const totalSqForPrice = totalWithWaste + accessorySq;
-  // Skylights are a one-off add-on, not part of the roof itself — exclude
-  // their (marked-up) price from the per-square figure.
-  const pricePerSq = totalSqForPrice > 0 ? (grandTotal - salesPrice(skylightsTotal)) / totalSqForPrice : 0;
-
-  // Auto-fill 4-Star Warranty qty with total SQ incl. hip/ridge & starter —
-  // matches how the warranty program itself measures a covered square.
-  useEffect(() => {
-    if (totalSqForPrice > 0) setFourStarWarrantyQty(totalSqForPrice.toFixed(2));
-  }, [totalSqForPrice]);
 
   // Proportional sales price: distributes markup + commission across raw cost
   // salesPrice(x) = (x / A) * grandTotal — all line prices sum to grandTotal
@@ -468,10 +454,13 @@ export default function EstimatorPage() {
     return salesPrice(rawCost) * commissionRate;
   }
 
-  // ─── Optional Add-Ons breakout (Drip Edge + Skylights) ───────────────────
-  // Same markup % and commission % as the base roof — just split into two
-  // buckets instead of one, so baseTotal + addOnsTotal === grandTotal exactly.
-  const addOnsRaw = dripEdgeTotal + skylightsTotal;
+  // ─── Optional Add-Ons breakout (Drip Edge, Landmark PRO, 4-Star Warranty,
+  // Skylights) — kept out of the base roof's per-square price and shown as
+  // their own line items at the bottom of the report, each with its own
+  // marked-up + commissioned price. Same markup % and commission % as the
+  // base roof — just split into two buckets instead of one, so
+  // baseTotal + addOnsTotal === grandTotal exactly.
+  const addOnsRaw = dripEdgeTotal + landmarkProTotal + fourStarWarrantyTotal + skylightsTotal;
   const baseRaw = A - addOnsRaw;
   const baseSubtotal = baseRaw * (1 + markupRate);
   const baseTotal = baseSubtotal / (1 - commissionRate);
@@ -479,6 +468,21 @@ export default function EstimatorPage() {
   const addOnsSubtotal = addOnsRaw * (1 + markupRate);
   const addOnsTotal = addOnsSubtotal / (1 - commissionRate);
   const addOnsCommission = addOnsTotal * commissionRate;
+
+  // Price per SQ denominator includes starter & hip & ridge bundles (3 bundles = 1 SQ)
+  const starterBundles  = roundUp(num(starterQty) / ST_BUNDLE_LF);
+  const hipRidgeBundles = roundUp(num(ridgeCapQty) / HR_BUNDLE_LF);
+  const accessorySq     = (starterBundles + hipRidgeBundles) / 3;
+  const totalSqForPrice = totalWithWaste + accessorySq;
+  // Add-ons aren't part of the base roof — exclude their (marked-up) price
+  // from the per-square figure.
+  const pricePerSq = totalSqForPrice > 0 ? (grandTotal - salesPrice(addOnsRaw)) / totalSqForPrice : 0;
+
+  // Auto-fill 4-Star Warranty qty with total SQ incl. hip/ridge & starter —
+  // matches how the warranty program itself measures a covered square.
+  useEffect(() => {
+    if (totalSqForPrice > 0) setFourStarWarrantyQty(totalSqForPrice.toFixed(2));
+  }, [totalSqForPrice]);
 
   const isAdmin = role === "admin" && canSeeAdminView;
 
@@ -1384,8 +1388,8 @@ export default function EstimatorPage() {
                   <span className="text-lg font-bold text-foreground">{fmtBig(baseTotal)}</span>
                 </div>
 
-                {/* Optional Add-Ons — Drip Edge & Skylights, same markup/commission rates as the base roof */}
-                {(dripEdgeTotal > 0 || skylights.length > 0) && (
+                {/* Optional Add-Ons — Drip Edge, Landmark PRO, 4-Star Warranty & Skylights, same markup/commission rates as the base roof */}
+                {(dripEdgeTotal > 0 || landmarkProTotal > 0 || fourStarWarrantyTotal > 0 || skylights.length > 0) && (
                   <div className="border border-primary/30 rounded-lg p-3 space-y-2">
                     <div className="text-xs font-bold text-primary uppercase tracking-wide">Optional Add-Ons</div>
                     {dripEdgeTotal > 0 && (
@@ -1395,6 +1399,24 @@ export default function EstimatorPage() {
                           <div className="text-xs text-muted-foreground">{num(dripEdgeQty)} FT — {dripEdgeColor} · commission {fmtBig(itemCommission(dripEdgeTotal))}</div>
                         </div>
                         <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
+                      </div>
+                    )}
+                    {landmarkProTotal > 0 && (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">Landmark PRO</div>
+                          <div className="text-xs text-muted-foreground">{num(landmarkProQty)} SQ · commission {fmtBig(itemCommission(landmarkProTotal))}</div>
+                        </div>
+                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(landmarkProTotal))}</span>
+                      </div>
+                    )}
+                    {fourStarWarrantyTotal > 0 && (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">4-Star Warranty</div>
+                          <div className="text-xs text-muted-foreground">{num(fourStarWarrantyQty).toFixed(2)} SQ · commission {fmtBig(itemCommission(fourStarWarrantyTotal))}</div>
+                        </div>
+                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(fourStarWarrantyTotal))}</span>
                       </div>
                     )}
                     {skylights.length > 0 && (
@@ -1430,7 +1452,7 @@ export default function EstimatorPage() {
                     <div className="text-sm font-semibold text-foreground">Your Commission</div>
                     <div className="text-xs text-muted-foreground">
                       {leadType === "office" ? "10% — Office Lead" : "14% — Self-Generated"}
-                      {(dripEdgeTotal > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
+                      {(dripEdgeTotal > 0 || landmarkProTotal > 0 || fourStarWarrantyTotal > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
                     </div>
                   </div>
                   <span className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="sales-commission">{fmtBig(F)}</span>
@@ -1815,18 +1837,30 @@ export default function EstimatorPage() {
                 <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
               </div>
 
-              {(dripEdgeTotal > 0 || skylights.length > 0) && (
+              {(dripEdgeTotal > 0 || landmarkProTotal > 0 || fourStarWarrantyTotal > 0 || skylights.length > 0) && (
                 <>
                   <Separator className="my-3" />
                   <div className="text-xs font-bold text-primary uppercase tracking-wide mb-2">Base Roof vs. Optional Add-Ons</div>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Base Roof — Total Price</span><span className="font-semibold">{fmtBig(baseTotal)}</span></div>
                     <div className="flex justify-between text-green-700 dark:text-green-400"><span className="text-xs">Base Roof — Commission</span><span className="font-semibold">{fmtBig(baseCommission)}</span></div>
-                    <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Add-Ons (Drip Edge + Skylights) — Total Price</span><span className="font-semibold">{fmtBig(addOnsTotal)}</span></div>
+                    <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Add-Ons (Drip Edge, Landmark PRO, 4-Star Warranty, Skylights) — Total Price</span><span className="font-semibold">{fmtBig(addOnsTotal)}</span></div>
                     {dripEdgeTotal > 0 && (
                       <div className="flex justify-between text-xs text-muted-foreground pl-3">
                         <span>— Drip Edge</span>
                         <span>{fmtBig(salesPrice(dripEdgeTotal))} (commission {fmtBig(itemCommission(dripEdgeTotal))})</span>
+                      </div>
+                    )}
+                    {landmarkProTotal > 0 && (
+                      <div className="flex justify-between text-xs text-muted-foreground pl-3">
+                        <span>— Landmark PRO ({num(landmarkProQty)} SQ)</span>
+                        <span>{fmtBig(salesPrice(landmarkProTotal))} (commission {fmtBig(itemCommission(landmarkProTotal))})</span>
+                      </div>
+                    )}
+                    {fourStarWarrantyTotal > 0 && (
+                      <div className="flex justify-between text-xs text-muted-foreground pl-3">
+                        <span>— 4-Star Warranty ({num(fourStarWarrantyQty).toFixed(2)} SQ)</span>
+                        <span>{fmtBig(salesPrice(fourStarWarrantyTotal))} (commission {fmtBig(itemCommission(fourStarWarrantyTotal))})</span>
                       </div>
                     )}
                     {skylights.length > 0 && (
