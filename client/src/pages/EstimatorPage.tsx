@@ -1418,11 +1418,7 @@ export default function EstimatorPage() {
                             <Checkbox checked={includeLandmarkPro} onCheckedChange={v => setIncludeLandmarkPro(!!v)} />
                             Landmark PRO
                           </div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap pl-6">
-                            <span>{totalWithWaste.toFixed(2)} SQ × $</span>
-                            <Input type="number" min="0" step="0.01" value={landmarkProPrice} onChange={e => setLandmarkProPrice(e.target.value)} className="h-6 w-16 text-xs px-1" />
-                            <span>/SQ · commission {fmtBig(itemCommission(landmarkProTotal))}</span>
-                          </div>
+                          <div className="text-xs text-muted-foreground pl-6">{totalWithWaste.toFixed(2)} SQ · commission {fmtBig(itemCommission(landmarkProTotal))}</div>
                         </div>
                         <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(landmarkProTotal))}</span>
                       </div>
@@ -1434,11 +1430,7 @@ export default function EstimatorPage() {
                             <Checkbox checked={includeFourStarWarranty} onCheckedChange={v => setIncludeFourStarWarranty(!!v)} />
                             4-Star Warranty
                           </div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap pl-6">
-                            <span>{totalSqForPrice.toFixed(2)} SQ × $</span>
-                            <Input type="number" min="0" step="0.01" value={fourStarWarrantyPrice} onChange={e => setFourStarWarrantyPrice(e.target.value)} className="h-6 w-16 text-xs px-1" />
-                            <span>/SQ · commission {fmtBig(itemCommission(fourStarWarrantyTotal))}</span>
-                          </div>
+                          <div className="text-xs text-muted-foreground pl-6">{totalSqForPrice.toFixed(2)} SQ · commission {fmtBig(itemCommission(fourStarWarrantyTotal))}</div>
                         </div>
                         <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(fourStarWarrantyTotal))}</span>
                       </div>
