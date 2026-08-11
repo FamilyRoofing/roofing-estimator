@@ -74,7 +74,9 @@ export const estimates = sqliteTable("estimates", {
   iceWaterQty: real("ice_water_qty"),
   iceWaterPricePerUnit: real("ice_water_price_per_unit"), // labor $/unit
   iceWaterMaterialPricePerUnit: real("ice_water_material_price_per_unit"),
-  // Drip Edge
+  // Drip Edge — qty/prices are always tracked (for material planning), but
+  // only counts toward the bottom-of-report Add-Ons total when selected.
+  includeDripEdge: integer("include_drip_edge", { mode: "boolean" }).default(false),
   dripEdgeQty: real("drip_edge_qty"),
   dripEdgeColor: text("drip_edge_color"),
   dripEdgePricePerUnit: real("drip_edge_price_per_unit"), // labor $/unit

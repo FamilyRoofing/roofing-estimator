@@ -301,6 +301,10 @@ export default function EstimatorPage() {
   const [dripEdgeColor, setDripEdgeColor] = useState("White");
   const [dripEdgePrice, setDripEdgePrice] = useState((DE_PIECE_COST / DE_PIECE_LF).toFixed(4));
   const [dripEdgeMaterialPrice, setDripEdgeMaterialPrice] = useState("0");
+  // Drip Edge is a normal materials-list item (qty tracked for the job
+  // regardless), but — like Landmark PRO / 4-Star Warranty — only counts
+  // toward the bottom-of-report Add-Ons total once explicitly selected.
+  const [includeDripEdge, setIncludeDripEdge] = useState(false);
 
   const [stepFlashingQty, setStepFlashingQty] = useState("");
   const [stepFlashingPrice, setStepFlashingPrice] = useState(String(D.stepFlashing));
@@ -415,7 +419,11 @@ export default function EstimatorPage() {
   const starterTotal      = costOf(num(starterQty), num(starterMaterialPrice), num(starterPrice));
   const ridgeCapTotal     = costOf(num(ridgeCapQty), num(ridgeCapMaterialPrice), num(ridgeCapPrice));
   const iceWaterTotal     = costOf(num(iceWaterQty), num(iceWaterMaterialPrice), num(iceWaterPrice));
-  const dripEdgeTotal     = costOf(num(dripEdgeQty), num(dripEdgeMaterialPrice), num(dripEdgePrice));
+  // Raw cost always reflects what's entered (shown in the materials table
+  // below); dripEdgeTotal — what actually counts toward the price — is
+  // gated on includeDripEdge, same as Landmark PRO / 4-Star Warranty.
+  const dripEdgeRawCost   = costOf(num(dripEdgeQty), num(dripEdgeMaterialPrice), num(dripEdgePrice));
+  const dripEdgeTotal     = includeDripEdge ? dripEdgeRawCost : 0;
   const stepFlashTotal    = costOf(num(stepFlashingQty), num(stepFlashingMaterialPrice), num(stepFlashingPrice));
   const trimCoilTotal     = costOf(num(trimCoilQty), num(trimCoilMaterialPrice), num(trimCoilPrice));
   const pipeBootsTotal    = costOf(num(pipeBootsQty), num(pipeBootsMaterialPrice), num(pipeBootsPrice));
@@ -826,6 +834,7 @@ export default function EstimatorPage() {
     setIceWaterQty(String(existingEstimate.iceWaterQty ?? ""));
     setIceWaterPrice(String(existingEstimate.iceWaterPricePerUnit ?? (IW_ROLL_COST / IW_ROLL_LF).toFixed(4)));
     setIceWaterMaterialPrice(String(existingEstimate.iceWaterMaterialPricePerUnit ?? 0));
+    setIncludeDripEdge(!!existingEstimate.includeDripEdge);
     setDripEdgeQty(String(existingEstimate.dripEdgeQty ?? ""));
     setDripEdgeColor(existingEstimate.dripEdgeColor || "White");
     setDripEdgePrice(String(existingEstimate.dripEdgePricePerUnit ?? (DE_PIECE_COST / DE_PIECE_LF).toFixed(4)));
@@ -929,6 +938,7 @@ export default function EstimatorPage() {
     iceWaterQty: num(iceWaterQty) || null,
     iceWaterPricePerUnit: num(iceWaterPrice),
     iceWaterMaterialPricePerUnit: num(iceWaterMaterialPrice),
+    includeDripEdge,
     dripEdgeQty: num(dripEdgeQty) || null,
     dripEdgeColor,
     dripEdgePricePerUnit: num(dripEdgePrice),
@@ -1399,14 +1409,17 @@ export default function EstimatorPage() {
                 </div>
 
                 {/* Optional Add-Ons — Drip Edge, Landmark PRO, 4-Star Warranty & Skylights, same markup/commission rates as the base roof */}
-                {(dripEdgeTotal > 0 || totalWithWaste > 0 || skylights.length > 0) && (
+                {(num(dripEdgeQty) > 0 || totalWithWaste > 0 || skylights.length > 0) && (
                   <div className="border border-primary/30 rounded-lg p-3 space-y-2">
                     <div className="text-xs font-bold text-primary uppercase tracking-wide">Optional Add-Ons</div>
-                    {dripEdgeTotal > 0 && (
+                    {num(dripEdgeQty) > 0 && (
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-sm font-semibold text-foreground">Drip Edge</div>
-                          <div className="text-xs text-muted-foreground">{num(dripEdgeQty)} FT — {dripEdgeColor} · commission {fmtBig(itemCommission(dripEdgeTotal))}</div>
+                          <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                            <Checkbox checked={includeDripEdge} onCheckedChange={v => setIncludeDripEdge(!!v)} />
+                            Drip Edge
+                          </div>
+                          <div className="text-xs text-muted-foreground pl-6">{num(dripEdgeQty)} FT — {dripEdgeColor} · commission {fmtBig(itemCommission(dripEdgeTotal))}</div>
                         </div>
                         <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
                       </div>
@@ -1468,7 +1481,7 @@ export default function EstimatorPage() {
                     <div className="text-sm font-semibold text-foreground">Your Commission</div>
                     <div className="text-xs text-muted-foreground">
                       {leadType === "office" ? "10% — Office Lead" : "14% — Self-Generated"}
-                      {(dripEdgeTotal > 0 || totalWithWaste > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
+                      {(num(dripEdgeQty) > 0 || totalWithWaste > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
                     </div>
                   </div>
                   <span className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="sales-commission">{fmtBig(F)}</span>
@@ -1617,7 +1630,7 @@ export default function EstimatorPage() {
                 </>}
                 qty={dripEdgeQty} setQty={setDripEdgeQty} unit="FT"
                 materialPrice={dripEdgeMaterialPrice} setMaterialPrice={setDripEdgeMaterialPrice}
-                laborPrice={dripEdgePrice} setLaborPrice={setDripEdgePrice} total={dripEdgeTotal}
+                laborPrice={dripEdgePrice} setLaborPrice={setDripEdgePrice} total={dripEdgeRawCost}
               />
               <MLRow label="Alum. Step Flashing" qty={stepFlashingQty} setQty={setStepFlashingQty} unit="FT" materialPrice={stepFlashingMaterialPrice} setMaterialPrice={setStepFlashingMaterialPrice} laborPrice={stepFlashingPrice} setLaborPrice={setStepFlashingPrice} total={stepFlashTotal} />
               <MLRow label="Trim Coil" qty={trimCoilQty} setQty={setTrimCoilQty} unit="FT" materialPrice={trimCoilMaterialPrice} setMaterialPrice={setTrimCoilMaterialPrice} laborPrice={trimCoilPrice} setLaborPrice={setTrimCoilPrice} total={trimCoilTotal} />
@@ -1839,7 +1852,7 @@ export default function EstimatorPage() {
                 </div>
               </div>
 
-              {(dripEdgeTotal > 0 || totalWithWaste > 0 || skylights.length > 0) && (
+              {(num(dripEdgeQty) > 0 || totalWithWaste > 0 || skylights.length > 0) && (
                 <>
                   <Separator className="my-3" />
                   <div className="text-xs font-bold text-primary uppercase tracking-wide mb-2">Base Roof vs. Optional Add-Ons</div>
@@ -1848,10 +1861,13 @@ export default function EstimatorPage() {
                     <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
                     <div className="flex justify-between text-green-700 dark:text-green-400"><span className="text-xs">Base Roof — Commission</span><span className="font-semibold">{fmtBig(baseCommission)}</span></div>
                     <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Add-Ons (Drip Edge, Landmark PRO, 4-Star Warranty, Skylights) — Total Price</span><span className="font-semibold">{fmtBig(addOnsTotal)}</span></div>
-                    {dripEdgeTotal > 0 && (
-                      <div className="flex justify-between text-xs text-muted-foreground pl-3">
-                        <span>— Drip Edge</span>
-                        <span>{fmtBig(salesPrice(dripEdgeTotal))} (commission {fmtBig(itemCommission(dripEdgeTotal))})</span>
+                    {num(dripEdgeQty) > 0 && (
+                      <div className="flex justify-between items-center text-xs text-muted-foreground pl-3 gap-2">
+                        <span className="flex items-center gap-1">
+                          <Checkbox checked={includeDripEdge} onCheckedChange={v => setIncludeDripEdge(!!v)} className="mr-1" />
+                          — Drip Edge
+                        </span>
+                        <span className="whitespace-nowrap">{fmtBig(salesPrice(dripEdgeTotal))} (commission {fmtBig(itemCommission(dripEdgeTotal))})</span>
                       </div>
                     )}
                     {totalWithWaste > 0 && (
