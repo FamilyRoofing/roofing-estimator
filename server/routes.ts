@@ -55,6 +55,7 @@ const PRICE_DEFAULT_KEYS = [
   "deckingPricePerUnit", "deckingMaterialPricePerUnit",
   "flintlasticPricePerUnit", "flintlasticMaterialPricePerUnit",
   "fourStarWarrantyPricePerUnit", "fourStarWarrantyMaterialPricePerUnit",
+  "landmarkProPricePerUnit",
 ] as const;
 
 function extractPriceDefaults(data: Record<string, unknown>) {

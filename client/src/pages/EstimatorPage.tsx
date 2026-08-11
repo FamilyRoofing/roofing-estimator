@@ -350,14 +350,13 @@ export default function EstimatorPage() {
   const [flintlasticPrice, setFlintlasticPrice] = useState("301");
   const [flintlasticMaterialPrice, setFlintlasticMaterialPrice] = useState("0");
 
-  // Landmark PRO — its own line item; material/labor prices are derived from
-  // the base Landmark shingle prices below (see landmarkProTotal), only qty
-  // is independently entered.
-  const [landmarkProQty, setLandmarkProQty] = useState("");
-
-  const [fourStarWarrantyQty, setFourStarWarrantyQty] = useState("");
+  // Landmark PRO and 4-Star Warranty — bottom-of-report add-ons, not editable
+  // materials-list line items. Quantity is always derived (never entered):
+  // Landmark PRO = total shingle SQ incl. waste; 4-Star Warranty = that same
+  // figure plus starter & hip/ridge (i.e. totalSqForPrice, below). Only the
+  // $/SQ rate is editable — set it to $0 to exclude one from a job.
+  const [landmarkProPrice, setLandmarkProPrice] = useState("15");
   const [fourStarWarrantyPrice, setFourStarWarrantyPrice] = useState("15");
-  const [fourStarWarrantyMaterialPrice, setFourStarWarrantyMaterialPrice] = useState("0");
 
   // Auto-fill underlayment with total sq + waste, rounded up to the nearest
   // 10 SQ since synthetic underlayment sells in 10 SQ rolls.
@@ -388,12 +387,23 @@ export default function EstimatorPage() {
   const costOf = (qty: number, materialPrice: number, laborPrice: number) =>
     qty * (materialPrice * (1 + materialTaxRate) + laborPrice);
 
+  // Price per SQ / add-on quantity basis: total shingle SQ incl. waste, plus
+  // starter & hip/ridge converted to SQ (3 bundles = 1 SQ). Computed here
+  // (rather than down with the rest of the pricing model) since Landmark
+  // PRO and 4-Star Warranty below need it too.
+  const starterBundles  = roundUp(num(starterQty) / ST_BUNDLE_LF);
+  const hipRidgeBundles = roundUp(num(ridgeCapQty) / HR_BUNDLE_LF);
+  const accessorySq     = (starterBundles + hipRidgeBundles) / 3;
+  const totalSqForPrice = totalWithWaste + accessorySq;
+
   const shingleTotal      = costOf(num(shingleQty), num(shingleMaterialPrice), num(shinglePrice));
-  // Landmark PRO — its own line item. Price is derived, not independently
-  // set: material is always $20 more than the base Landmark material price
-  // above, labor is always the same rate as the base Landmark labor price.
-  const landmarkProMaterialPrice = num(shingleMaterialPrice) + D.proUpcharge;
-  const landmarkProTotal = costOf(num(landmarkProQty), landmarkProMaterialPrice, num(shinglePrice));
+  // Landmark PRO — always-on bottom-of-report add-on: total shingle SQ incl.
+  // waste × its own $/SQ rate (no material/labor split — set the rate to $0
+  // to exclude it from a job).
+  const landmarkProTotal = costOf(totalWithWaste, 0, num(landmarkProPrice));
+  // 4-Star Warranty — same idea, but based on totalSqForPrice (incl. starter
+  // & hip/ridge) since that's how the warranty program measures a square.
+  const fourStarWarrantyTotal = costOf(totalSqForPrice, 0, num(fourStarWarrantyPrice));
   // New construction shingle labor runs $25/SQ cheaper than a replacement
   // (no tear-off staging/cleanup) — the Labor $/unit field above always
   // holds the replacement rate; this discount is applied on top of it.
@@ -417,7 +427,6 @@ export default function EstimatorPage() {
   const ridgeVentTotal    = costOf(num(ridgeVentQty), num(ridgeVentMaterialPrice), num(ridgeVentPrice));
   const deckingTotal      = costOf(num(deckingQty), num(deckingMaterialPrice), num(deckingPrice));
   const flintlasticTotal  = costOf(roundUp(num(flintlasticQty)), num(flintlasticMaterialPrice), num(flintlasticPrice));
-  const fourStarWarrantyTotal = costOf(num(fourStarWarrantyQty), num(fourStarWarrantyMaterialPrice), num(fourStarWarrantyPrice));
 
   // Layers to Remove — tear-off surcharge: $30/SQ for each layer above the first,
   // applied across the total SQ with waste (all roof sections combined).
@@ -469,20 +478,10 @@ export default function EstimatorPage() {
   const addOnsTotal = addOnsSubtotal / (1 - commissionRate);
   const addOnsCommission = addOnsTotal * commissionRate;
 
-  // Price per SQ denominator includes starter & hip & ridge bundles (3 bundles = 1 SQ)
-  const starterBundles  = roundUp(num(starterQty) / ST_BUNDLE_LF);
-  const hipRidgeBundles = roundUp(num(ridgeCapQty) / HR_BUNDLE_LF);
-  const accessorySq     = (starterBundles + hipRidgeBundles) / 3;
-  const totalSqForPrice = totalWithWaste + accessorySq;
   // Add-ons aren't part of the base roof — exclude their (marked-up) price
-  // from the per-square figure.
+  // from the per-square figure. (totalSqForPrice is computed earlier, above
+  // the raw line totals, since Landmark PRO / 4-Star Warranty need it too.)
   const pricePerSq = totalSqForPrice > 0 ? (grandTotal - salesPrice(addOnsRaw)) / totalSqForPrice : 0;
-
-  // Auto-fill 4-Star Warranty qty with total SQ incl. hip/ridge & starter —
-  // matches how the warranty program itself measures a covered square.
-  useEffect(() => {
-    if (totalSqForPrice > 0) setFourStarWarrantyQty(totalSqForPrice.toFixed(2));
-  }, [totalSqForPrice]);
 
   const isAdmin = role === "admin" && canSeeAdminView;
 
@@ -794,7 +793,7 @@ export default function EstimatorPage() {
     set(priceDefaults.flintlasticPricePerUnit, setFlintlasticPrice);
     set(priceDefaults.flintlasticMaterialPricePerUnit, setFlintlasticMaterialPrice);
     set(priceDefaults.fourStarWarrantyPricePerUnit, setFourStarWarrantyPrice);
-    set(priceDefaults.fourStarWarrantyMaterialPricePerUnit, setFourStarWarrantyMaterialPrice);
+    set(priceDefaults.landmarkProPricePerUnit, setLandmarkProPrice);
   }, [isNew, priceDefaults]);
 
   useEffect(() => {
@@ -869,10 +868,8 @@ export default function EstimatorPage() {
     setFlintlasticQty(String(existingEstimate.flintlasticQty ?? ""));
     setFlintlasticPrice(String(existingEstimate.flintlasticPricePerUnit ?? 301));
     setFlintlasticMaterialPrice(String(existingEstimate.flintlasticMaterialPricePerUnit ?? 0));
-    setLandmarkProQty(String(existingEstimate.landmarkProQty ?? ""));
-    setFourStarWarrantyQty(String(existingEstimate.fourStarWarrantyQty ?? ""));
+    setLandmarkProPrice(String(existingEstimate.landmarkProPricePerUnit ?? 15));
     setFourStarWarrantyPrice(String(existingEstimate.fourStarWarrantyPricePerUnit ?? 15));
-    setFourStarWarrantyMaterialPrice(String(existingEstimate.fourStarWarrantyMaterialPricePerUnit ?? 0));
     if (existingEstimate.referralFee === 100 || existingEstimate.referralFee === 200) {
       setReferralFee(existingEstimate.referralFee);
     } else {
@@ -914,7 +911,7 @@ export default function EstimatorPage() {
     shingleQty: num(shingleQty) || null,
     shinglePricePerSq: num(shinglePrice),
     shingleMaterialPricePerSq: num(shingleMaterialPrice),
-    landmarkProQty: num(landmarkProQty) || null,
+    landmarkProPricePerUnit: num(landmarkProPrice),
     underlaymentQty: num(underlaymentQty) || null,
     underlaymentPricePerSq: num(underlaymentPrice),
     underlaymentMaterialPricePerSq: num(underlaymentMaterialPrice),
@@ -960,9 +957,7 @@ export default function EstimatorPage() {
     flintlasticQty: num(flintlasticQty) || null,
     flintlasticPricePerUnit: num(flintlasticPrice),
     flintlasticMaterialPricePerUnit: num(flintlasticMaterialPrice),
-    fourStarWarrantyQty: num(fourStarWarrantyQty) || null,
     fourStarWarrantyPricePerUnit: num(fourStarWarrantyPrice),
-    fourStarWarrantyMaterialPricePerUnit: num(fourStarWarrantyMaterialPrice),
     referralFee: referralFee || null,
     referralName: referralName || null,
     miscAmount: MISC_AMOUNT,
@@ -1298,8 +1293,6 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <SalesGroupLabel>Other</SalesGroupLabel>
               <SalesQtyRow label="Flintlastic" qty={flintlasticQty} setQty={setFlintlasticQty} unit="SQ" />
-              <SalesQtyRow label="Landmark PRO" qty={landmarkProQty} setQty={setLandmarkProQty} unit="SQ" />
-              <SalesQtyRow label="4-Star Warranty" qty={fourStarWarrantyQty} setQty={setFourStarWarrantyQty} unit="SQ" />
               {/* Decking: thickness + type selectors */}
               <div className="grid grid-cols-12 gap-2 items-center mb-1">
                 <div className="col-span-7 text-sm font-medium flex items-center gap-1 flex-wrap">
@@ -1389,7 +1382,7 @@ export default function EstimatorPage() {
                 </div>
 
                 {/* Optional Add-Ons — Drip Edge, Landmark PRO, 4-Star Warranty & Skylights, same markup/commission rates as the base roof */}
-                {(dripEdgeTotal > 0 || landmarkProTotal > 0 || fourStarWarrantyTotal > 0 || skylights.length > 0) && (
+                {(dripEdgeTotal > 0 || totalWithWaste > 0 || skylights.length > 0) && (
                   <div className="border border-primary/30 rounded-lg p-3 space-y-2">
                     <div className="text-xs font-bold text-primary uppercase tracking-wide">Optional Add-Ons</div>
                     {dripEdgeTotal > 0 && (
@@ -1401,20 +1394,28 @@ export default function EstimatorPage() {
                         <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
                       </div>
                     )}
-                    {landmarkProTotal > 0 && (
+                    {totalWithWaste > 0 && (
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-semibold text-foreground">Landmark PRO</div>
-                          <div className="text-xs text-muted-foreground">{num(landmarkProQty)} SQ · commission {fmtBig(itemCommission(landmarkProTotal))}</div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                            <span>{totalWithWaste.toFixed(2)} SQ × $</span>
+                            <Input type="number" min="0" step="0.01" value={landmarkProPrice} onChange={e => setLandmarkProPrice(e.target.value)} className="h-6 w-16 text-xs px-1" />
+                            <span>/SQ · commission {fmtBig(itemCommission(landmarkProTotal))}</span>
+                          </div>
                         </div>
                         <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(landmarkProTotal))}</span>
                       </div>
                     )}
-                    {fourStarWarrantyTotal > 0 && (
+                    {totalWithWaste > 0 && (
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-semibold text-foreground">4-Star Warranty</div>
-                          <div className="text-xs text-muted-foreground">{num(fourStarWarrantyQty).toFixed(2)} SQ · commission {fmtBig(itemCommission(fourStarWarrantyTotal))}</div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                            <span>{totalSqForPrice.toFixed(2)} SQ × $</span>
+                            <Input type="number" min="0" step="0.01" value={fourStarWarrantyPrice} onChange={e => setFourStarWarrantyPrice(e.target.value)} className="h-6 w-16 text-xs px-1" />
+                            <span>/SQ · commission {fmtBig(itemCommission(fourStarWarrantyTotal))}</span>
+                          </div>
                         </div>
                         <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(fourStarWarrantyTotal))}</span>
                       </div>
@@ -1452,7 +1453,7 @@ export default function EstimatorPage() {
                     <div className="text-sm font-semibold text-foreground">Your Commission</div>
                     <div className="text-xs text-muted-foreground">
                       {leadType === "office" ? "10% — Office Lead" : "14% — Self-Generated"}
-                      {(dripEdgeTotal > 0 || landmarkProTotal > 0 || fourStarWarrantyTotal > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
+                      {(dripEdgeTotal > 0 || totalWithWaste > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
                     </div>
                   </div>
                   <span className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="sales-commission">{fmtBig(F)}</span>
@@ -1717,8 +1718,6 @@ export default function EstimatorPage() {
               <Separator className="my-2" />
               <GroupLabel>Other</GroupLabel>
               <MLRow label="Flintlastic" qty={String(roundUp(num(flintlasticQty)))} setQty={setFlintlasticQty} unit="SQ" materialPrice={flintlasticMaterialPrice} setMaterialPrice={setFlintlasticMaterialPrice} laborPrice={flintlasticPrice} setLaborPrice={setFlintlasticPrice} total={flintlasticTotal} />
-              <MLRow label="Landmark PRO" qty={landmarkProQty} setQty={setLandmarkProQty} unit="SQ" materialPrice={landmarkProMaterialPrice.toFixed(2)} setMaterialPrice={() => {}} laborPrice={shinglePrice} setLaborPrice={() => {}} total={landmarkProTotal} readonlyPrice />
-              <MLRow label="4-Star Warranty" qty={fourStarWarrantyQty} setQty={setFourStarWarrantyQty} unit="SQ" materialPrice={fourStarWarrantyMaterialPrice} setMaterialPrice={setFourStarWarrantyMaterialPrice} laborPrice={fourStarWarrantyPrice} setLaborPrice={setFourStarWarrantyPrice} total={fourStarWarrantyTotal} prefilled />
               {/* Decking with thickness + type selectors */}
               <MLRow
                 label={<>
@@ -1837,7 +1836,7 @@ export default function EstimatorPage() {
                 <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
               </div>
 
-              {(dripEdgeTotal > 0 || landmarkProTotal > 0 || fourStarWarrantyTotal > 0 || skylights.length > 0) && (
+              {(dripEdgeTotal > 0 || totalWithWaste > 0 || skylights.length > 0) && (
                 <>
                   <Separator className="my-3" />
                   <div className="text-xs font-bold text-primary uppercase tracking-wide mb-2">Base Roof vs. Optional Add-Ons</div>
@@ -1851,16 +1850,24 @@ export default function EstimatorPage() {
                         <span>{fmtBig(salesPrice(dripEdgeTotal))} (commission {fmtBig(itemCommission(dripEdgeTotal))})</span>
                       </div>
                     )}
-                    {landmarkProTotal > 0 && (
-                      <div className="flex justify-between text-xs text-muted-foreground pl-3">
-                        <span>— Landmark PRO ({num(landmarkProQty)} SQ)</span>
-                        <span>{fmtBig(salesPrice(landmarkProTotal))} (commission {fmtBig(itemCommission(landmarkProTotal))})</span>
+                    {totalWithWaste > 0 && (
+                      <div className="flex justify-between items-center text-xs text-muted-foreground pl-3 gap-2">
+                        <span className="flex items-center gap-1 flex-wrap">
+                          — Landmark PRO ({totalWithWaste.toFixed(2)} SQ × $
+                          <Input type="number" min="0" step="0.01" value={landmarkProPrice} onChange={e => setLandmarkProPrice(e.target.value)} className="h-5 w-14 text-xs px-1 inline-block" />
+                          /SQ)
+                        </span>
+                        <span className="whitespace-nowrap">{fmtBig(salesPrice(landmarkProTotal))} (commission {fmtBig(itemCommission(landmarkProTotal))})</span>
                       </div>
                     )}
-                    {fourStarWarrantyTotal > 0 && (
-                      <div className="flex justify-between text-xs text-muted-foreground pl-3">
-                        <span>— 4-Star Warranty ({num(fourStarWarrantyQty).toFixed(2)} SQ)</span>
-                        <span>{fmtBig(salesPrice(fourStarWarrantyTotal))} (commission {fmtBig(itemCommission(fourStarWarrantyTotal))})</span>
+                    {totalWithWaste > 0 && (
+                      <div className="flex justify-between items-center text-xs text-muted-foreground pl-3 gap-2">
+                        <span className="flex items-center gap-1 flex-wrap">
+                          — 4-Star Warranty ({totalSqForPrice.toFixed(2)} SQ × $
+                          <Input type="number" min="0" step="0.01" value={fourStarWarrantyPrice} onChange={e => setFourStarWarrantyPrice(e.target.value)} className="h-5 w-14 text-xs px-1 inline-block" />
+                          /SQ)
+                        </span>
+                        <span className="whitespace-nowrap">{fmtBig(salesPrice(fourStarWarrantyTotal))} (commission {fmtBig(itemCommission(fourStarWarrantyTotal))})</span>
                       </div>
                     )}
                     {skylights.length > 0 && (

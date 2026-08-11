@@ -52,10 +52,10 @@ export const estimates = sqliteTable("estimates", {
   shinglePricePerSq: real("shingle_price_per_sq"), // labor $/unit
   shingleMaterialPricePerSq: real("shingle_material_price_per_sq"),
   landmarkProUpcharge: real("landmark_pro_upcharge"), // retired — kept for old estimates
-  // Landmark PRO — its own line item now. Price is derived (material =
-  // shingle material + $20, labor = same as shingle labor), so only qty
-  // is stored here.
-  landmarkProQty: real("landmark_pro_qty"),
+  landmarkProQty: real("landmark_pro_qty"), // retired — kept for old estimates
+  // Landmark PRO — always-on bottom-of-report add-on (see Estimator page):
+  // qty is always totalWithWaste, not stored; only the $/SQ rate is.
+  landmarkProPricePerUnit: real("landmark_pro_price_per_unit"),
   // Synthetic Underlayment
   underlaymentQty: real("underlayment_qty"),
   underlaymentPricePerSq: real("underlayment_price_per_sq"), // labor $/unit
@@ -125,10 +125,12 @@ export const estimates = sqliteTable("estimates", {
   flintlasticQty: real("flintlastic_qty"),
   flintlasticPricePerUnit: real("flintlastic_price_per_unit"), // labor $/unit
   flintlasticMaterialPricePerUnit: real("flintlastic_material_price_per_unit"),
-  // 4-Star Warranty (GAF system warranty upgrade) — $/SQ incl. hip/ridge + starter
-  fourStarWarrantyQty: real("four_star_warranty_qty"),
-  fourStarWarrantyPricePerUnit: real("four_star_warranty_price_per_unit"), // labor $/unit
-  fourStarWarrantyMaterialPricePerUnit: real("four_star_warranty_material_price_per_unit"),
+  fourStarWarrantyQty: real("four_star_warranty_qty"), // retired — kept for old estimates
+  fourStarWarrantyMaterialPricePerUnit: real("four_star_warranty_material_price_per_unit"), // retired — kept for old estimates
+  // 4-Star Warranty — always-on bottom-of-report add-on (see Estimator
+  // page): qty is always totalSqForPrice (incl. hip/ridge + starter), not
+  // stored; only the $/SQ rate is.
+  fourStarWarrantyPricePerUnit: real("four_star_warranty_price_per_unit"),
   // Labor
   laborQty: real("labor_qty"),
   laborPricePerUnit: real("labor_price_per_unit"),
@@ -185,7 +187,8 @@ export const priceDefaults = sqliteTable("price_defaults", {
   flintlasticPricePerUnit: real("flintlastic_price_per_unit"),
   flintlasticMaterialPricePerUnit: real("flintlastic_material_price_per_unit"),
   fourStarWarrantyPricePerUnit: real("four_star_warranty_price_per_unit"),
-  fourStarWarrantyMaterialPricePerUnit: real("four_star_warranty_material_price_per_unit"),
+  fourStarWarrantyMaterialPricePerUnit: real("four_star_warranty_material_price_per_unit"), // retired — unused
+  landmarkProPricePerUnit: real("landmark_pro_price_per_unit"),
   chimneySmallPricePerUnit: real("chimney_small_price_per_unit"),
   chimneySmallMaterialPricePerUnit: real("chimney_small_material_price_per_unit"),
   chimneyAveragePricePerUnit: real("chimney_average_price_per_unit"),
