@@ -13,43 +13,7 @@
 // 87 ft"). Anchoring each regex to a single value at end-of-line targets
 // only the Summary page's aggregate figures and skips the Buildings page.
 
-export interface GafReportData {
-  address: string | null; // property/job address — the report's title line
-  roofAreaSqFt: number | null;
-  roofFacets: number | null;
-  pitch: string | null; // e.g. "6/12" — matches the estimator's PITCHES options
-  eavesFt: number | null;
-  hipsFt: number | null;
-  rakesFt: number | null;
-  ridgesFt: number | null;
-  valleysFt: number | null;
-  dripEdgeFt: number | null;
-  leakBarrierFt: number | null;
-  ridgeCapFt: number | null;
-  starterFt: number | null;
-  stepFt: number | null;
-  suggestedWastePercent: number | null;
-  // Per-structure breakdown from the report's "Buildings" page — only
-  // populated (length >= 2) when the report covers more than one roof
-  // structure (e.g. a house plus a detached garage). Empty otherwise.
-  buildings: GafBuildingData[];
-}
-
-// The measurement subset the estimator can actually use, broken out per
-// building instead of summed across the whole report.
-export interface GafBuildingData {
-  roofAreaSqFt: number | null;
-  pitch: string | null;
-  dripEdgeFt: number | null;
-  leakBarrierFt: number | null;
-  ridgeCapFt: number | null;
-  starterFt: number | null;
-  // Ridges only, excluding hips — Ridge Cap combines both (hip & ridge cap
-  // shingles cover the same run), but ridge vent only sits along ridges.
-  ridgesFt: number | null;
-  valleysFt: number | null;
-  stepFt: number | null;
-}
+import type { ReportData, BuildingData } from "@shared/reportTypes";
 
 function extractNumber(text: string, label: string, unit: string): number | null {
   const re = new RegExp(`^${label}\\s+([\\d,]+(?:\\.\\d+)?)\\s*${unit}\\s*$`, "im");
@@ -123,7 +87,7 @@ function extractBuildingPitches(section: string): string[] {
   return pitches;
 }
 
-function extractBuildings(text: string): GafBuildingData[] {
+function extractBuildings(text: string): BuildingData[] {
   const section = extractBuildingsSection(text);
   if (!section) return [];
   const roofAreas = extractBuildingValues(section, "Roof Area", "sq\\s*ft");
@@ -151,9 +115,10 @@ function extractBuildings(text: string): GafBuildingData[] {
   }));
 }
 
-export function parseGafReport(text: string): GafReportData {
+export function parseGafReport(text: string): ReportData {
   const pitchMatch = text.match(/^Pitch\s+(\d+)\s*\/\s*(\d+)\s*$/im);
   return {
+    source: "gaf",
     address: extractAddress(text),
     roofAreaSqFt: extractNumber(text, "Roof Area", "sq\\s*ft"),
     roofFacets: extractNumber(text, "Roof Facets", ""),

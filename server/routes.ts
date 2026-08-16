@@ -6,6 +6,9 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import { parseGafReport } from "./gafParser";
+import { parseRoofrReport } from "./roofrParser";
+import { parseEagleviewReport } from "./eagleviewParser";
+import { detectReportSource } from "./reportDetector";
 
 const reportUpload = multer({
   storage: multer.memoryStorage(),
@@ -257,10 +260,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // ── GAF QuickMeasure report import ──────────────────────────────────────────
+  // ── Measurement report import (GAF, Roofr, EagleView) ───────────────────────
 
-  // POST upload + parse a GAF QuickMeasure "Full Report" PDF
-  app.post("/api/parse-gaf-report", requireAuth, (req, res) => {
+  // POST upload + parse a roof measurement report PDF. Auto-detects which
+  // of the supported providers produced it and dispatches accordingly.
+  app.post("/api/parse-report", requireAuth, (req, res) => {
     reportUpload.single("report")(req, res, async (uploadErr) => {
       if (uploadErr) return res.status(400).json({ error: uploadErr.message || "Upload failed" });
       if (!req.file) return res.status(400).json({ error: "No file uploaded" });
@@ -268,10 +272,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
         const parser = new PDFParse({ data: req.file.buffer });
         const result = await parser.getText();
         await parser.destroy();
-        res.json(parseGafReport(result.text));
+        const source = detectReportSource(result.text);
+        if (source === "gaf") return res.json(parseGafReport(result.text));
+        if (source === "roofr") return res.json(parseRoofrReport(result.text));
+        if (source === "eagleview") return res.json(parseEagleviewReport(result.text));
+        res.status(400).json({ error: "Couldn't identify this report format. Supported: GAF QuickMeasure, Roofr, EagleView." });
       } catch (err) {
-        console.error("GAF report parse error:", err);
-        res.status(500).json({ error: "Failed to read that PDF. Make sure it's a GAF QuickMeasure report." });
+        console.error("Report parse error:", err);
+        res.status(500).json({ error: "Failed to read that PDF." });
       }
     });
   });
