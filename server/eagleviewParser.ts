@@ -5,11 +5,15 @@
 // Pitches" block near the end of the report (labels use "Field = Value"
 // rather than GAF's "Field\nValue" or Roofr's "Total Field Xft Yin"), e.g.:
 //   Ridges = 48 ft (4 Ridges)
+//   Rakes* = 94 ft (12 Rakes)
 //   Eaves/Starter** = 93 ft (10 Eaves)
 //   Drip Edge (Eaves + Rakes) = 187 ft (26 Lengths)
 // EagleView reports Eaves and Starter as a single combined figure (there's
-// no separate Starter measurement, unlike GAF), and gives Drip Edge
-// pre-computed directly rather than needing eaves+rakes summed.
+// no separate pure-Eaves measurement, unlike GAF/Roofr). Since it also
+// gives Drip Edge pre-computed as Eaves + Rakes, a pure eaves figure can be
+// recovered as dripEdgeCombined - rakesFt — that's what's used for eavesFt
+// here, distinct from the Eaves/Starter figure (which still feeds starterFt,
+// the only place the combined figure is actually correct to use).
 //
 // This parser handles the single-structure report layout only — no sample
 // of a multi-structure EagleView report has been checked yet, so buildings
@@ -65,7 +69,10 @@ export function parseEagleviewReport(text: string): ReportData {
   const section = extractLengthsSection(text);
   const ridgesFt = extractNumber(section, "Ridges", "ft");
   const hipsFt = extractNumber(section, "Hips", "ft");
-  const eavesFt = extractNumber(section, "Eaves/Starter", "ft");
+  const rakesFt = extractNumber(section, "Rakes", "ft");
+  const eavesStarterFt = extractNumber(section, "Eaves/Starter", "ft");
+  const dripEdgeCombinedFt = extractNumber(section, "Drip Edge \\(Eaves \\+ Rakes\\)", "ft");
+  const eavesFt = (dripEdgeCombinedFt != null && rakesFt != null) ? dripEdgeCombinedFt - rakesFt : null;
   const pitchMatch = section.match(/Predominant Pitch\s*=\s*(\d+)\s*\/\s*(\d+)/i);
   return {
     source: "eagleview",
@@ -75,15 +82,15 @@ export function parseEagleviewReport(text: string): ReportData {
     pitch: pitchMatch ? `${pitchMatch[1]}/${pitchMatch[2]}` : null,
     eavesFt,
     hipsFt,
-    rakesFt: extractNumber(section, "Rakes", "ft"),
+    rakesFt,
     ridgesFt,
     valleysFt: extractNumber(section, "Valleys", "ft"),
-    dripEdgeFt: extractNumber(section, "Drip Edge \\(Eaves \\+ Rakes\\)", "ft"),
     leakBarrierFt: null, // no EagleView equivalent — Ice & Water is derived from step+valleys instead
     // Not printed directly — Hip & Ridge cap covers both hips and ridges.
     ridgeCapFt: ridgesFt != null && hipsFt != null ? ridgesFt + hipsFt : null,
-    // EagleView reports eaves and starter as one combined figure.
-    starterFt: eavesFt,
+    // EagleView reports eaves and starter as one combined figure — no way
+    // to recover a pure Starter-only figure, so this stays the combined one.
+    starterFt: eavesStarterFt,
     stepFt: extractNumber(section, "Step flashing", "ft"),
     suggestedWastePercent: extractSuggestedWastePercent(text),
     buildings: [],

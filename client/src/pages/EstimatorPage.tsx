@@ -34,13 +34,13 @@ const DEFAULT_WASTE_PERCENT = 10;
 // (single-structure reports) or nothing excluded, this reduces to the
 // report's own aggregate figures.
 function summarizeReportBuildings(data: ReportData, excluded: Set<number>): {
-  roofAreaSqFt: number | null; pitch: string | null; dripEdgeFt: number | null;
+  roofAreaSqFt: number | null; pitch: string | null; eavesFt: number | null; rakesFt: number | null;
   leakBarrierFt: number | null; ridgeCapFt: number | null; starterFt: number | null; ridgesFt: number | null;
   valleysFt: number | null; stepFt: number | null;
 } {
   if (data.buildings.length === 0 || excluded.size === 0) {
     return {
-      roofAreaSqFt: data.roofAreaSqFt, pitch: data.pitch, dripEdgeFt: data.dripEdgeFt,
+      roofAreaSqFt: data.roofAreaSqFt, pitch: data.pitch, eavesFt: data.eavesFt, rakesFt: data.rakesFt,
       leakBarrierFt: data.leakBarrierFt, ridgeCapFt: data.ridgeCapFt, starterFt: data.starterFt,
       ridgesFt: data.ridgesFt, valleysFt: data.valleysFt, stepFt: data.stepFt,
     };
@@ -51,7 +51,8 @@ function summarizeReportBuildings(data: ReportData, excluded: Set<number>): {
   return {
     roofAreaSqFt: included.length ? sum("roofAreaSqFt") : null,
     pitch: largest?.pitch ?? data.pitch,
-    dripEdgeFt: included.length ? sum("dripEdgeFt") : null,
+    eavesFt: included.length ? sum("eavesFt") : null,
+    rakesFt: included.length ? sum("rakesFt") : null,
     leakBarrierFt: included.length ? sum("leakBarrierFt") : null,
     ridgeCapFt: included.length ? sum("ridgeCapFt") : null,
     starterFt: included.length ? sum("starterFt") : null,
@@ -277,14 +278,22 @@ export default function EstimatorPage() {
   const [iceWaterPrice, setIceWaterPrice] = useState((IW_ROLL_COST / IW_ROLL_LF).toFixed(4));
   const [iceWaterMaterialPrice, setIceWaterMaterialPrice] = useState("0");
 
-  const [dripEdgeQty, setDripEdgeQty] = useState("");
-  const [dripEdgeColor, setDripEdgeColor] = useState("White");
-  const [dripEdgePrice, setDripEdgePrice] = useState((DE_PIECE_COST / DE_PIECE_LF).toFixed(4));
-  const [dripEdgeMaterialPrice, setDripEdgeMaterialPrice] = useState("0");
-  // Drip Edge is a normal materials-list item (qty tracked for the job
-  // regardless), but — like Landmark PRO / 4-Star Warranty — only counts
-  // toward the bottom-of-report Add-Ons total once explicitly selected.
-  const [includeDripEdge, setIncludeDripEdge] = useState(false);
+  // Rakes and Eaves (formerly a single combined "Drip Edge" line item) —
+  // qty/price tracked for the job regardless, but — like Landmark PRO /
+  // 4-Star Warranty — only counts toward the bottom-of-report Add-Ons total
+  // once explicitly selected. Split into two so a roof can have one without
+  // the other (e.g. a hip roof has eaves but no rakes).
+  const [rakesQty, setRakesQty] = useState("");
+  const [rakesColor, setRakesColor] = useState("White");
+  const [rakesPrice, setRakesPrice] = useState((DE_PIECE_COST / DE_PIECE_LF).toFixed(4));
+  const [rakesMaterialPrice, setRakesMaterialPrice] = useState("0");
+  const [includeRakes, setIncludeRakes] = useState(false);
+
+  const [eavesQty, setEavesQty] = useState("");
+  const [eavesColor, setEavesColor] = useState("White");
+  const [eavesPrice, setEavesPrice] = useState((DE_PIECE_COST / DE_PIECE_LF).toFixed(4));
+  const [eavesMaterialPrice, setEavesMaterialPrice] = useState("0");
+  const [includeEaves, setIncludeEaves] = useState(false);
 
   const [stepFlashingQty, setStepFlashingQty] = useState("");
   const [stepFlashingPrice, setStepFlashingPrice] = useState(String(D.stepFlashing));
@@ -400,10 +409,13 @@ export default function EstimatorPage() {
   const ridgeCapTotal     = costOf(num(ridgeCapQty), num(ridgeCapMaterialPrice), num(ridgeCapPrice));
   const iceWaterTotal     = costOf(num(iceWaterQty), num(iceWaterMaterialPrice), num(iceWaterPrice));
   // Raw cost always reflects what's entered (shown in the materials table
-  // below); dripEdgeTotal — what actually counts toward the price — is
-  // gated on includeDripEdge, same as Landmark PRO / 4-Star Warranty.
-  const dripEdgeRawCost   = costOf(num(dripEdgeQty), num(dripEdgeMaterialPrice), num(dripEdgePrice));
-  const dripEdgeTotal     = includeDripEdge ? dripEdgeRawCost : 0;
+  // below); rakesTotal/eavesTotal — what actually counts toward the price —
+  // are gated on includeRakes/includeEaves, same as Landmark PRO / 4-Star
+  // Warranty.
+  const rakesRawCost      = costOf(num(rakesQty), num(rakesMaterialPrice), num(rakesPrice));
+  const rakesTotal        = includeRakes ? rakesRawCost : 0;
+  const eavesRawCost      = costOf(num(eavesQty), num(eavesMaterialPrice), num(eavesPrice));
+  const eavesTotal        = includeEaves ? eavesRawCost : 0;
   const stepFlashTotal    = costOf(num(stepFlashingQty), num(stepFlashingMaterialPrice), num(stepFlashingPrice));
   const trimCoilTotal     = costOf(num(trimCoilQty), num(trimCoilMaterialPrice), num(trimCoilPrice));
   const pipeBootsTotal    = costOf(num(pipeBootsQty), num(pipeBootsMaterialPrice), num(pipeBootsPrice));
@@ -426,7 +438,7 @@ export default function EstimatorPage() {
 
   // ─── Markup model ─────────────────────────────────────────────────────────
   const A = shingleTotal + landmarkProTotal + newConstructionDiscountTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
-    ridgeCapTotal + iceWaterTotal + dripEdgeTotal + stepFlashTotal +
+    ridgeCapTotal + iceWaterTotal + rakesTotal + eavesTotal + stepFlashTotal +
     trimCoilTotal + pipeBootsTotal + chimneysTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
     ridgeVentTotal + deckingTotal + flintlasticTotal + fourStarWarrantyTotal + layersTotal + referralFee + MISC_AMOUNT;
   const B = A * markupRate;
@@ -453,13 +465,13 @@ export default function EstimatorPage() {
     return salesPrice(rawCost) * commissionRate;
   }
 
-  // ─── Optional Add-Ons breakout (Drip Edge, Landmark PRO, 4-Star Warranty,
-  // Skylights) — kept out of the base roof's per-square price and shown as
-  // their own line items at the bottom of the report, each with its own
-  // marked-up + commissioned price. Same markup % and commission % as the
-  // base roof — just split into two buckets instead of one, so
+  // ─── Optional Add-Ons breakout (Rakes, Eaves, Landmark PRO, 4-Star
+  // Warranty, Skylights) — kept out of the base roof's per-square price and
+  // shown as their own line items at the bottom of the report, each with
+  // its own marked-up + commissioned price. Same markup % and commission %
+  // as the base roof — just split into two buckets instead of one, so
   // baseTotal + addOnsTotal === grandTotal exactly.
-  const addOnsRaw = dripEdgeTotal + landmarkProTotal + fourStarWarrantyTotal + skylightsTotal;
+  const addOnsRaw = rakesTotal + eavesTotal + landmarkProTotal + fourStarWarrantyTotal + skylightsTotal;
   const baseRaw = A - addOnsRaw;
   const baseSubtotal = baseRaw * (1 + markupRate);
   const baseTotal = baseSubtotal / (1 - commissionRate);
@@ -533,7 +545,8 @@ export default function EstimatorPage() {
     const sqWithWaste = roundUpToThird(squares * 1.15);
     const shingleQtyVal = sqWithWaste;
     const underlaymentQtyVal = roundUpToTen(sqWithWaste);
-    const dripEdgeVal = b.dripEdgeFt ?? 0;
+    const rakesVal = b.rakesFt ?? 0;
+    const eavesVal = b.eavesFt ?? 0;
     const iceWaterVal = (b.stepFt ?? 0) + (b.valleysFt ?? 0);
     const ridgeCapVal = b.ridgeCapFt ?? 0;
     const starterVal = b.starterFt ?? 0;
@@ -549,8 +562,10 @@ export default function EstimatorPage() {
     const ridgeCapMatV = num(priceDefaults?.ridgeCapMaterialPricePerUnit);
     const iceWaterPriceV = num(priceDefaults?.iceWaterPricePerUnit) || (IW_ROLL_COST / IW_ROLL_LF);
     const iceWaterMatV = num(priceDefaults?.iceWaterMaterialPricePerUnit);
-    const dripEdgePriceV = num(priceDefaults?.dripEdgePricePerUnit) || (DE_PIECE_COST / DE_PIECE_LF);
-    const dripEdgeMatV = num(priceDefaults?.dripEdgeMaterialPricePerUnit);
+    const rakesPriceV = num(priceDefaults?.rakesPricePerUnit) || (DE_PIECE_COST / DE_PIECE_LF);
+    const rakesMatV = num(priceDefaults?.rakesMaterialPricePerUnit);
+    const eavesPriceV = num(priceDefaults?.eavesPricePerUnit) || (DE_PIECE_COST / DE_PIECE_LF);
+    const eavesMatV = num(priceDefaults?.eavesMaterialPricePerUnit);
     const ridgeVentPriceV = num(priceDefaults?.ventilationPricePerUnit) || (RV_PIECE_COST / RV_PIECE_LF);
     const ridgeVentMatV = num(priceDefaults?.ventilationMaterialPricePerUnit);
 
@@ -560,7 +575,8 @@ export default function EstimatorPage() {
       + cost(starterVal, starterMatV, starterPriceV)
       + cost(ridgeCapVal, ridgeCapMatV, ridgeCapPriceV)
       + cost(iceWaterVal, iceWaterMatV, iceWaterPriceV)
-      + cost(dripEdgeVal, dripEdgeMatV, dripEdgePriceV)
+      + cost(rakesVal, rakesMatV, rakesPriceV)
+      + cost(eavesVal, eavesMatV, eavesPriceV)
       + cost(ridgeVentVal, ridgeVentMatV, ridgeVentPriceV)
       + MISC_AMOUNT;
     const grandTotalV = (Av + Av * DEFAULT_MARKUP_RATE) / (1 - COMMISSION_OFFICE);
@@ -595,10 +611,14 @@ export default function EstimatorPage() {
       iceWaterQty: iceWaterVal || null,
       iceWaterPricePerUnit: iceWaterPriceV,
       iceWaterMaterialPricePerUnit: iceWaterMatV,
-      dripEdgeQty: dripEdgeVal || null,
-      dripEdgeColor: "White",
-      dripEdgePricePerUnit: dripEdgePriceV,
-      dripEdgeMaterialPricePerUnit: dripEdgeMatV,
+      rakesQty: rakesVal || null,
+      rakesColor: "White",
+      rakesPricePerUnit: rakesPriceV,
+      rakesMaterialPricePerUnit: rakesMatV,
+      eavesQty: eavesVal || null,
+      eavesColor: "White",
+      eavesPricePerUnit: eavesPriceV,
+      eavesMaterialPricePerUnit: eavesMatV,
       ventilationQty: ridgeVentVal || null,
       ventilationPricePerUnit: ridgeVentPriceV,
       ventilationMaterialPricePerUnit: ridgeVentMatV,
@@ -623,7 +643,8 @@ export default function EstimatorPage() {
         return next;
       });
     }
-    if (summary.dripEdgeFt != null) setDripEdgeQty(String(summary.dripEdgeFt));
+    if (summary.rakesFt != null) setRakesQty(String(summary.rakesFt));
+    if (summary.eavesFt != null) setEavesQty(String(summary.eavesFt));
     // Ice & Water Shield coverage is step flashing + valleys, not the
     // report's generic "Leak Barrier" figure.
     if (summary.stepFt != null || summary.valleysFt != null) {
@@ -763,8 +784,10 @@ export default function EstimatorPage() {
     set(priceDefaults.ridgeCapMaterialPricePerUnit, setRidgeCapMaterialPrice);
     set(priceDefaults.iceWaterPricePerUnit, setIceWaterPrice);
     set(priceDefaults.iceWaterMaterialPricePerUnit, setIceWaterMaterialPrice);
-    set(priceDefaults.dripEdgePricePerUnit, setDripEdgePrice);
-    set(priceDefaults.dripEdgeMaterialPricePerUnit, setDripEdgeMaterialPrice);
+    set(priceDefaults.rakesPricePerUnit, setRakesPrice);
+    set(priceDefaults.rakesMaterialPricePerUnit, setRakesMaterialPrice);
+    set(priceDefaults.eavesPricePerUnit, setEavesPrice);
+    set(priceDefaults.eavesMaterialPricePerUnit, setEavesMaterialPrice);
     set(priceDefaults.stepFlashingPricePerUnit, setStepFlashingPrice);
     set(priceDefaults.stepFlashingMaterialPricePerUnit, setStepFlashingMaterialPrice);
     set(priceDefaults.trimCoilPricePerUnit, setTrimCoilPrice);
@@ -815,11 +838,16 @@ export default function EstimatorPage() {
     setIceWaterQty(String(existingEstimate.iceWaterQty ?? ""));
     setIceWaterPrice(String(existingEstimate.iceWaterPricePerUnit ?? (IW_ROLL_COST / IW_ROLL_LF).toFixed(4)));
     setIceWaterMaterialPrice(String(existingEstimate.iceWaterMaterialPricePerUnit ?? 0));
-    setIncludeDripEdge(!!existingEstimate.includeDripEdge);
-    setDripEdgeQty(String(existingEstimate.dripEdgeQty ?? ""));
-    setDripEdgeColor(existingEstimate.dripEdgeColor || "White");
-    setDripEdgePrice(String(existingEstimate.dripEdgePricePerUnit ?? (DE_PIECE_COST / DE_PIECE_LF).toFixed(4)));
-    setDripEdgeMaterialPrice(String(existingEstimate.dripEdgeMaterialPricePerUnit ?? 0));
+    setIncludeRakes(!!existingEstimate.includeRakes);
+    setRakesQty(String(existingEstimate.rakesQty ?? ""));
+    setRakesColor(existingEstimate.rakesColor || "White");
+    setRakesPrice(String(existingEstimate.rakesPricePerUnit ?? (DE_PIECE_COST / DE_PIECE_LF).toFixed(4)));
+    setRakesMaterialPrice(String(existingEstimate.rakesMaterialPricePerUnit ?? 0));
+    setIncludeEaves(!!existingEstimate.includeEaves);
+    setEavesQty(String(existingEstimate.eavesQty ?? ""));
+    setEavesColor(existingEstimate.eavesColor || "White");
+    setEavesPrice(String(existingEstimate.eavesPricePerUnit ?? (DE_PIECE_COST / DE_PIECE_LF).toFixed(4)));
+    setEavesMaterialPrice(String(existingEstimate.eavesMaterialPricePerUnit ?? 0));
     setStepFlashingQty(String(existingEstimate.stepFlashingQty ?? ""));
     setStepFlashingPrice(String(existingEstimate.stepFlashingPricePerUnit ?? D.stepFlashing));
     setStepFlashingMaterialPrice(String(existingEstimate.stepFlashingMaterialPricePerUnit ?? 0));
@@ -919,11 +947,16 @@ export default function EstimatorPage() {
     iceWaterQty: num(iceWaterQty) || null,
     iceWaterPricePerUnit: num(iceWaterPrice),
     iceWaterMaterialPricePerUnit: num(iceWaterMaterialPrice),
-    includeDripEdge,
-    dripEdgeQty: num(dripEdgeQty) || null,
-    dripEdgeColor,
-    dripEdgePricePerUnit: num(dripEdgePrice),
-    dripEdgeMaterialPricePerUnit: num(dripEdgeMaterialPrice),
+    includeRakes,
+    rakesQty: num(rakesQty) || null,
+    rakesColor,
+    rakesPricePerUnit: num(rakesPrice),
+    rakesMaterialPricePerUnit: num(rakesMaterialPrice),
+    includeEaves,
+    eavesQty: num(eavesQty) || null,
+    eavesColor,
+    eavesPricePerUnit: num(eavesPrice),
+    eavesMaterialPricePerUnit: num(eavesMaterialPrice),
     stepFlashingQty: num(stepFlashingQty) || null,
     stepFlashingPricePerUnit: num(stepFlashingPrice),
     stepFlashingMaterialPricePerUnit: num(stepFlashingMaterialPrice),
@@ -998,14 +1031,15 @@ export default function EstimatorPage() {
                 <ReportReviewRow label="Job Address" value={reportData.address} />
                 <ReportReviewRow label="Squares (Roof Area)" value={summary.roofAreaSqFt != null ? `${(summary.roofAreaSqFt / 100).toFixed(2)} SQ (${summary.roofAreaSqFt.toLocaleString()} sq ft)` : null} />
                 <ReportReviewRow label="Pitch" value={summary.pitch} />
-                <ReportReviewRow label="Drip Edge (eaves + rakes)" value={summary.dripEdgeFt != null ? `${summary.dripEdgeFt.toLocaleString()} FT` : null} />
+                <ReportReviewRow label="Eaves" value={summary.eavesFt != null ? `${summary.eavesFt.toLocaleString()} FT` : null} />
+                <ReportReviewRow label="Rakes" value={summary.rakesFt != null ? `${summary.rakesFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Ice & Water Shield (step + valleys)" value={(summary.stepFt != null || summary.valleysFt != null) ? `${((summary.stepFt ?? 0) + (summary.valleysFt ?? 0)).toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Hip & Ridge (ridge cap)" value={summary.ridgeCapFt != null ? `${summary.ridgeCapFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Starter Strip" value={summary.starterFt != null ? `${summary.starterFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Ridge Vent (ridges only, excl. hips)" value={summary.ridgesFt != null ? `${summary.ridgesFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Waste %" value={reportData.suggestedWastePercent != null ? `${reportData.suggestedWastePercent}% (suggested)` : `${DEFAULT_WASTE_PERCENT}% (default — none suggested)`} />
                 <p className="text-xs text-muted-foreground pt-3">
-                  This will overwrite the Address field, Waste %, Section 1's squares/pitch, and the Drip Edge, Ice & Water, Hip & Ridge, Starter Strip, and Ridge Vent quantities above — all still editable afterward.
+                  This will overwrite the Address field, Waste %, Section 1's squares/pitch, and the Eaves, Rakes, Ice & Water, Hip & Ridge, Starter Strip, and Ridge Vent quantities above — all still editable afterward.
                 </p>
                 {reportData.buildings.length > 1 && (
                   <div className="mt-3 pt-3 border-t border-border">
@@ -1193,17 +1227,30 @@ export default function EstimatorPage() {
 
               <Separator className="my-2" />
               <SalesGroupLabel>Flashing & Metal</SalesGroupLabel>
-              {/* Drip Edge with color selector */}
+              {/* Rakes and Eaves, each with their own color selector */}
               <div className="grid grid-cols-12 gap-2 items-center mb-1">
                 <div className="col-span-7 text-sm font-medium flex items-center gap-1 flex-wrap">
-                  <span>Drip Edge</span>
-                  <Select value={dripEdgeColor} onValueChange={setDripEdgeColor}>
+                  <span>Rakes</span>
+                  <Select value={rakesColor} onValueChange={setRakesColor}>
                     <SelectTrigger className="text-xs h-6 px-2 w-28 border-dashed"><SelectValue /></SelectTrigger>
                     <SelectContent>{DRIP_EDGE_COLORS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="col-span-3">
-                  <Input type="number" min="0" value={dripEdgeQty} onChange={e => setDripEdgeQty(e.target.value)} placeholder="0" className="text-sm h-8" />
+                  <Input type="number" min="0" value={rakesQty} onChange={e => setRakesQty(e.target.value)} placeholder="0" className="text-sm h-8" />
+                </div>
+                <div className="col-span-2 text-xs text-center text-muted-foreground">FT</div>
+              </div>
+              <div className="grid grid-cols-12 gap-2 items-center mb-1">
+                <div className="col-span-7 text-sm font-medium flex items-center gap-1 flex-wrap">
+                  <span>Eaves</span>
+                  <Select value={eavesColor} onValueChange={setEavesColor}>
+                    <SelectTrigger className="text-xs h-6 px-2 w-28 border-dashed"><SelectValue /></SelectTrigger>
+                    <SelectContent>{DRIP_EDGE_COLORS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-3">
+                  <Input type="number" min="0" value={eavesQty} onChange={e => setEavesQty(e.target.value)} placeholder="0" className="text-sm h-8" />
                 </div>
                 <div className="col-span-2 text-xs text-center text-muted-foreground">FT</div>
               </div>
@@ -1389,20 +1436,32 @@ export default function EstimatorPage() {
                   </span>
                 </div>
 
-                {/* Optional Add-Ons — Drip Edge, Landmark PRO, 4-Star Warranty & Skylights, same markup/commission rates as the base roof */}
-                {(num(dripEdgeQty) > 0 || totalWithWaste > 0 || skylights.length > 0) && (
+                {/* Optional Add-Ons — Rakes, Eaves, Landmark PRO, 4-Star Warranty & Skylights, same markup/commission rates as the base roof */}
+                {(num(rakesQty) > 0 || num(eavesQty) > 0 || totalWithWaste > 0 || skylights.length > 0) && (
                   <div className="border border-primary/30 rounded-lg p-3 space-y-2">
                     <div className="text-xs font-bold text-primary uppercase tracking-wide">Optional Add-Ons</div>
-                    {num(dripEdgeQty) > 0 && (
+                    {num(rakesQty) > 0 && (
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <Checkbox checked={includeDripEdge} onCheckedChange={v => setIncludeDripEdge(!!v)} />
-                            Drip Edge
+                            <Checkbox checked={includeRakes} onCheckedChange={v => setIncludeRakes(!!v)} />
+                            Rakes
                           </div>
-                          <div className="text-xs text-muted-foreground pl-6">{num(dripEdgeQty)} FT — {dripEdgeColor} · commission {fmtBig(itemCommission(dripEdgeTotal))}</div>
+                          <div className="text-xs text-muted-foreground pl-6">{num(rakesQty)} FT — {rakesColor} · commission {fmtBig(itemCommission(rakesTotal))}</div>
                         </div>
-                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(dripEdgeTotal))}</span>
+                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(rakesTotal))}</span>
+                      </div>
+                    )}
+                    {num(eavesQty) > 0 && (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                            <Checkbox checked={includeEaves} onCheckedChange={v => setIncludeEaves(!!v)} />
+                            Eaves
+                          </div>
+                          <div className="text-xs text-muted-foreground pl-6">{num(eavesQty)} FT — {eavesColor} · commission {fmtBig(itemCommission(eavesTotal))}</div>
+                        </div>
+                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(eavesTotal))}</span>
                       </div>
                     )}
                     {totalWithWaste > 0 && (
@@ -1462,7 +1521,7 @@ export default function EstimatorPage() {
                     <div className="text-sm font-semibold text-foreground">Your Commission</div>
                     <div className="text-xs text-muted-foreground">
                       {leadType === "office" ? "10% — Office Lead" : "14% — Self-Generated"}
-                      {(num(dripEdgeQty) > 0 || totalWithWaste > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
+                      {(num(rakesQty) > 0 || num(eavesQty) > 0 || totalWithWaste > 0 || skylights.length > 0) && ` (Base ${fmtBig(baseCommission)} + Add-Ons ${fmtBig(addOnsCommission)})`}
                     </div>
                   </div>
                   <span className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="sales-commission">{fmtBig(F)}</span>
@@ -1603,15 +1662,27 @@ export default function EstimatorPage() {
               <GroupLabel>Flashing & Metal</GroupLabel>
               <MLRow
                 label={<>
-                  <span>Drip Edge</span>
-                  <Select value={dripEdgeColor} onValueChange={setDripEdgeColor}>
+                  <span>Rakes</span>
+                  <Select value={rakesColor} onValueChange={setRakesColor}>
                     <SelectTrigger className="text-xs h-6 px-2 w-28 border-dashed"><SelectValue /></SelectTrigger>
                     <SelectContent>{DRIP_EDGE_COLORS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                   </Select>
                 </>}
-                qty={dripEdgeQty} setQty={setDripEdgeQty} unit="FT"
-                materialPrice={dripEdgeMaterialPrice} setMaterialPrice={setDripEdgeMaterialPrice}
-                laborPrice={dripEdgePrice} setLaborPrice={setDripEdgePrice} total={dripEdgeRawCost}
+                qty={rakesQty} setQty={setRakesQty} unit="FT"
+                materialPrice={rakesMaterialPrice} setMaterialPrice={setRakesMaterialPrice}
+                laborPrice={rakesPrice} setLaborPrice={setRakesPrice} total={rakesRawCost}
+              />
+              <MLRow
+                label={<>
+                  <span>Eaves</span>
+                  <Select value={eavesColor} onValueChange={setEavesColor}>
+                    <SelectTrigger className="text-xs h-6 px-2 w-28 border-dashed"><SelectValue /></SelectTrigger>
+                    <SelectContent>{DRIP_EDGE_COLORS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </>}
+                qty={eavesQty} setQty={setEavesQty} unit="FT"
+                materialPrice={eavesMaterialPrice} setMaterialPrice={setEavesMaterialPrice}
+                laborPrice={eavesPrice} setLaborPrice={setEavesPrice} total={eavesRawCost}
               />
               <MLRow label="Alum. Step Flashing" qty={stepFlashingQty} setQty={setStepFlashingQty} unit="FT" materialPrice={stepFlashingMaterialPrice} setMaterialPrice={setStepFlashingMaterialPrice} laborPrice={stepFlashingPrice} setLaborPrice={setStepFlashingPrice} total={stepFlashTotal} />
               <MLRow label="Trim Coil" qty={trimCoilQty} setQty={setTrimCoilQty} unit="FT" materialPrice={trimCoilMaterialPrice} setMaterialPrice={setTrimCoilMaterialPrice} laborPrice={trimCoilPrice} setLaborPrice={setTrimCoilPrice} total={trimCoilTotal} />
@@ -1833,7 +1904,7 @@ export default function EstimatorPage() {
                 </div>
               </div>
 
-              {(num(dripEdgeQty) > 0 || totalWithWaste > 0 || skylights.length > 0) && (
+              {(num(rakesQty) > 0 || num(eavesQty) > 0 || totalWithWaste > 0 || skylights.length > 0) && (
                 <>
                   <Separator className="my-3" />
                   <div className="text-xs font-bold text-primary uppercase tracking-wide mb-2">Base Roof vs. Optional Add-Ons</div>
@@ -1841,14 +1912,23 @@ export default function EstimatorPage() {
                     <div className="flex justify-between"><span className="text-muted-foreground">Base Roof — Total Price</span><span className="font-semibold">{fmtBig(baseTotal)}</span></div>
                     <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
                     <div className="flex justify-between text-green-700 dark:text-green-400"><span className="text-xs">Base Roof — Commission</span><span className="font-semibold">{fmtBig(baseCommission)}</span></div>
-                    <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Add-Ons (Drip Edge, Landmark PRO, 4-Star Warranty, Skylights) — Total Price</span><span className="font-semibold">{fmtBig(addOnsTotal)}</span></div>
-                    {num(dripEdgeQty) > 0 && (
+                    <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Add-Ons (Rakes, Eaves, Landmark PRO, 4-Star Warranty, Skylights) — Total Price</span><span className="font-semibold">{fmtBig(addOnsTotal)}</span></div>
+                    {num(rakesQty) > 0 && (
                       <div className="flex justify-between items-center text-xs text-muted-foreground pl-3 gap-2">
                         <span className="flex items-center gap-1">
-                          <Checkbox checked={includeDripEdge} onCheckedChange={v => setIncludeDripEdge(!!v)} className="mr-1" />
-                          — Drip Edge
+                          <Checkbox checked={includeRakes} onCheckedChange={v => setIncludeRakes(!!v)} className="mr-1" />
+                          — Rakes
                         </span>
-                        <span className="whitespace-nowrap">{fmtBig(salesPrice(dripEdgeTotal))} (commission {fmtBig(itemCommission(dripEdgeTotal))})</span>
+                        <span className="whitespace-nowrap">{fmtBig(salesPrice(rakesTotal))} (commission {fmtBig(itemCommission(rakesTotal))})</span>
+                      </div>
+                    )}
+                    {num(eavesQty) > 0 && (
+                      <div className="flex justify-between items-center text-xs text-muted-foreground pl-3 gap-2">
+                        <span className="flex items-center gap-1">
+                          <Checkbox checked={includeEaves} onCheckedChange={v => setIncludeEaves(!!v)} className="mr-1" />
+                          — Eaves
+                        </span>
+                        <span className="whitespace-nowrap">{fmtBig(salesPrice(eavesTotal))} (commission {fmtBig(itemCommission(eavesTotal))})</span>
                       </div>
                     )}
                     {totalWithWaste > 0 && (

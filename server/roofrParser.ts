@@ -1,10 +1,10 @@
 // Parses a Roofr "Report summary" page (as extracted by pdf-parse) into the
 // roof measurement fields the estimator can prefill.
 //
-// Roofr reports (unlike GAF's) already give combined figures directly —
-// "Eaves + rakes" (= Drip Edge) and "Hips + ridges" (= Hip & Ridge cap) are
-// printed as their own lines, so no summing is needed. Lengths are given as
-// "Xft Yin" rather than plain feet.
+// Roofr reports "Total eaves" and "Total rakes" as separate lines (both on
+// the aggregate "Report summary" page and on each per-structure summary
+// page), plus "Hips + ridges" combined for Hip & Ridge cap, so no summing is
+// needed there. Lengths are given as "Xft Yin" rather than plain feet.
 //
 // Multi-structure properties get one "Structure #N summary" page per
 // structure (identical field layout to "Report summary", just scoped to
@@ -59,17 +59,27 @@ function extractAddress(text: string): string | null {
 
 // Pulls the measurement fields the estimator uses out of a single "...
 // summary" section (either "Report summary" or one "Structure #N summary").
+// Confirmed against a real multi-structure sample that "Total eaves" and
+// "Total rakes" are printed separately on every "Structure #N summary" page
+// too, not just the aggregate "Report summary" page.
 function extractMeasurements(section: string): Omit<BuildingData, never> & { roofFacets?: number } {
-  const eavesPlusRakes = extractFeetInches(section, "Eaves \\+ rakes");
+  const eavesFt = extractFeetInches(section, "Total eaves");
+  const rakesFt = extractFeetInches(section, "Total rakes");
+  // Roofr doesn't report a separate Starter figure — it runs along the same
+  // eaves (and often rakes) as the drip edge, so default to that combined
+  // length. Falls back to the printed "Eaves + rakes" line if for some
+  // reason the individual totals above aren't found.
+  const starterFt = (eavesFt != null || rakesFt != null)
+    ? (eavesFt ?? 0) + (rakesFt ?? 0)
+    : extractFeetInches(section, "Eaves \\+ rakes");
   return {
     roofAreaSqFt: extractPlainNumber(section, "Total roof area", "sqft"),
     pitch: extractPitch(section),
-    dripEdgeFt: eavesPlusRakes,
+    eavesFt,
+    rakesFt,
     leakBarrierFt: null, // no Roofr equivalent — Ice & Water is derived from step+valleys instead
     ridgeCapFt: extractFeetInches(section, "Hips \\+ ridges"),
-    // Roofr doesn't report a separate Starter figure — it runs along the
-    // same eaves (and often rakes) as the drip edge, so default to that.
-    starterFt: eavesPlusRakes,
+    starterFt,
     ridgesFt: extractFeetInches(section, "Total ridges"),
     valleysFt: extractFeetInches(section, "Total valleys"),
     stepFt: extractFeetInches(section, "Total step flashing"),
@@ -103,12 +113,11 @@ export function parseRoofrReport(text: string): ReportData {
     roofAreaSqFt: measurements.roofAreaSqFt,
     roofFacets: extractPlainNumber(summarySection, "Total roof facets", "facets"),
     pitch: measurements.pitch,
-    eavesFt: extractFeetInches(summarySection, "Total eaves"),
+    eavesFt: measurements.eavesFt,
     hipsFt: extractFeetInches(summarySection, "Total hips"),
-    rakesFt: extractFeetInches(summarySection, "Total rakes"),
+    rakesFt: measurements.rakesFt,
     ridgesFt: measurements.ridgesFt,
     valleysFt: measurements.valleysFt,
-    dripEdgeFt: measurements.dripEdgeFt,
     leakBarrierFt: null,
     ridgeCapFt: measurements.ridgeCapFt,
     starterFt: measurements.starterFt,

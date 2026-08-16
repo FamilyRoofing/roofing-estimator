@@ -74,13 +74,27 @@ export const estimates = sqliteTable("estimates", {
   iceWaterQty: real("ice_water_qty"),
   iceWaterPricePerUnit: real("ice_water_price_per_unit"), // labor $/unit
   iceWaterMaterialPricePerUnit: real("ice_water_material_price_per_unit"),
-  // Drip Edge — qty/prices are always tracked (for material planning), but
-  // only counts toward the bottom-of-report Add-Ons total when selected.
+  // Drip Edge (retired — split into separate Rakes/Eaves line items below,
+  // kept for old estimates only).
   includeDripEdge: integer("include_drip_edge", { mode: "boolean" }).default(false),
   dripEdgeQty: real("drip_edge_qty"),
   dripEdgeColor: text("drip_edge_color"),
   dripEdgePricePerUnit: real("drip_edge_price_per_unit"), // labor $/unit
   dripEdgeMaterialPricePerUnit: real("drip_edge_material_price_per_unit"),
+  // Rakes — qty/prices are always tracked (for material planning), but only
+  // counts toward the bottom-of-report Add-Ons total when selected.
+  includeRakes: integer("include_rakes", { mode: "boolean" }).default(false),
+  rakesQty: real("rakes_qty"),
+  rakesColor: text("rakes_color"),
+  rakesPricePerUnit: real("rakes_price_per_unit"), // labor $/unit
+  rakesMaterialPricePerUnit: real("rakes_material_price_per_unit"),
+  // Eaves — same treatment as Rakes, tracked separately since a roof can
+  // have one without the other (e.g. a hip roof has eaves but no rakes).
+  includeEaves: integer("include_eaves", { mode: "boolean" }).default(false),
+  eavesQty: real("eaves_qty"),
+  eavesColor: text("eaves_color"),
+  eavesPricePerUnit: real("eaves_price_per_unit"), // labor $/unit
+  eavesMaterialPricePerUnit: real("eaves_material_price_per_unit"),
   // Aluminum Step Flashing
   stepFlashingQty: real("step_flashing_qty"),
   stepFlashingPricePerUnit: real("step_flashing_price_per_unit"), // labor $/unit
@@ -171,8 +185,12 @@ export const priceDefaults = sqliteTable("price_defaults", {
   ridgeCapMaterialPricePerUnit: real("ridge_cap_material_price_per_unit"),
   iceWaterPricePerUnit: real("ice_water_price_per_unit"),
   iceWaterMaterialPricePerUnit: real("ice_water_material_price_per_unit"),
-  dripEdgePricePerUnit: real("drip_edge_price_per_unit"),
-  dripEdgeMaterialPricePerUnit: real("drip_edge_material_price_per_unit"),
+  dripEdgePricePerUnit: real("drip_edge_price_per_unit"), // retired — kept for old estimates
+  dripEdgeMaterialPricePerUnit: real("drip_edge_material_price_per_unit"), // retired — kept for old estimates
+  rakesPricePerUnit: real("rakes_price_per_unit"),
+  rakesMaterialPricePerUnit: real("rakes_material_price_per_unit"),
+  eavesPricePerUnit: real("eaves_price_per_unit"),
+  eavesMaterialPricePerUnit: real("eaves_material_price_per_unit"),
   stepFlashingPricePerUnit: real("step_flashing_price_per_unit"),
   stepFlashingMaterialPricePerUnit: real("step_flashing_material_price_per_unit"),
   trimCoilPricePerUnit: real("trim_coil_price_per_unit"),

@@ -48,8 +48,8 @@ function extractBuildingsSection(text: string): string | null {
 }
 
 // Extract every "value unit" pair (in order) from a labeled line within the
-// Buildings section, e.g. label="Drip Edge" unit="ft" on
-// "Drip Edge 167 ft 219 ft 60 ft 44 ft" → [167, 219, 60, 44].
+// Buildings section, e.g. label="Eaves" unit="ft" on
+// "Eaves 167 ft 219 ft 60 ft 44 ft" → [167, 219, 60, 44].
 function extractBuildingValues(section: string, label: string, unit: string): number[] {
   const lineMatch = section.match(new RegExp(`^${label}\\s+(.+)$`, "im"));
   if (!lineMatch) return [];
@@ -95,7 +95,8 @@ function extractBuildings(text: string): BuildingData[] {
   // extra to offer beyond the Summary page's aggregate figures.
   if (roofAreas.length < 2) return [];
   const pitches = extractBuildingPitches(section);
-  const dripEdges = extractBuildingValues(section, "Drip Edge", "ft");
+  const eaves = extractBuildingValues(section, "Eaves", "ft");
+  const rakes = extractBuildingValues(section, "Rakes", "ft");
   const leakBarriers = extractBuildingValues(section, "Leak Barrier", "ft");
   const ridgeCaps = extractBuildingValues(section, "Ridge Cap", "ft");
   const starters = extractBuildingValues(section, "Starter", "ft");
@@ -105,7 +106,8 @@ function extractBuildings(text: string): BuildingData[] {
   return roofAreas.map((roofAreaSqFt, i) => ({
     roofAreaSqFt,
     pitch: pitches[i] ?? null,
-    dripEdgeFt: dripEdges[i] ?? null,
+    eavesFt: eaves[i] ?? null,
+    rakesFt: rakes[i] ?? null,
     leakBarrierFt: leakBarriers[i] ?? null,
     ridgeCapFt: ridgeCaps[i] ?? null,
     starterFt: starters[i] ?? null,
@@ -128,7 +130,6 @@ export function parseGafReport(text: string): ReportData {
     rakesFt: extractNumber(text, "Rakes", "ft"),
     ridgesFt: extractNumber(text, "Ridges", "ft"),
     valleysFt: extractNumber(text, "Valleys", "ft"),
-    dripEdgeFt: extractNumber(text, "Drip Edge", "ft"),
     leakBarrierFt: extractNumber(text, "Leak Barrier", "ft"),
     ridgeCapFt: extractNumber(text, "Ridge Cap", "ft"),
     starterFt: extractNumber(text, "Starter", "ft"),

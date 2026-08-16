@@ -182,6 +182,20 @@ _addCol("price_defaults", "landmark_pro_price_per_unit", "REAL");
 _addCol("estimates", "include_landmark_pro", "INTEGER DEFAULT 0");
 _addCol("estimates", "include_four_star_warranty", "INTEGER DEFAULT 0");
 _addCol("estimates", "include_drip_edge", "INTEGER DEFAULT 0");
+_addCol("estimates", "include_rakes", "INTEGER DEFAULT 0");
+_addCol("estimates", "rakes_qty", "REAL");
+_addCol("estimates", "rakes_color", "TEXT");
+_addCol("estimates", "rakes_price_per_unit", "REAL");
+_addCol("estimates", "rakes_material_price_per_unit", "REAL");
+_addCol("estimates", "include_eaves", "INTEGER DEFAULT 0");
+_addCol("estimates", "eaves_qty", "REAL");
+_addCol("estimates", "eaves_color", "TEXT");
+_addCol("estimates", "eaves_price_per_unit", "REAL");
+_addCol("estimates", "eaves_material_price_per_unit", "REAL");
+_addCol("price_defaults", "rakes_price_per_unit", "REAL");
+_addCol("price_defaults", "rakes_material_price_per_unit", "REAL");
+_addCol("price_defaults", "eaves_price_per_unit", "REAL");
+_addCol("price_defaults", "eaves_material_price_per_unit", "REAL");
 
 // ─── Seed / secure default admin account ───────────────────────────────────────
 // Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a

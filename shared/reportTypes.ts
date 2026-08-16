@@ -15,7 +15,6 @@ export interface ReportData {
   rakesFt: number | null;
   ridgesFt: number | null;
   valleysFt: number | null;
-  dripEdgeFt: number | null;
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
@@ -34,7 +33,11 @@ export interface ReportData {
 export interface BuildingData {
   roofAreaSqFt: number | null;
   pitch: string | null;
-  dripEdgeFt: number | null;
+  // Rakes and eaves are tracked separately (not combined into a single Drip
+  // Edge figure) since a roof can have one without the other — e.g. a hip
+  // roof has eaves but no rakes.
+  eavesFt: number | null;
+  rakesFt: number | null;
   leakBarrierFt: number | null;
   ridgeCapFt: number | null;
   starterFt: number | null;
