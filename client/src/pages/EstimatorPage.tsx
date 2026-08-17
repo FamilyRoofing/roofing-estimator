@@ -246,7 +246,7 @@ export default function EstimatorPage() {
 
   // Roof sections
   const [sections, setSections] = useState([{ squares: "", pitch: "6/12" }]);
-  const [wastePercent, setWastePercent] = useState("15");
+  const [wastePercent, setWastePercent] = useState("10");
   const [constructionType, setConstructionType] = useState<"reroof" | "new_construction">("reroof");
   const [layersToRemove, setLayersToRemove] = useState("1");
 
@@ -537,12 +537,15 @@ export default function EstimatorPage() {
 
   // Build a full new-estimate payload for a single split-out building,
   // mirroring what a brand-new estimate would look like if its report numbers
-  // were applied and saved untouched: current price book, standard 15%
-  // waste, 40% markup, office commission, no tax.
+  // were applied and saved untouched: current price book, the report's
+  // suggested waste % (falling back to the 10% default when none is
+  // suggested — same rule as the main estimate), 40% markup, office
+  // commission, no tax.
   const buildSplitEstimatePayload = (b: BuildingData, label: string) => {
     const squares = b.roofAreaSqFt != null ? b.roofAreaSqFt / 100 : 0;
     const pitch = b.pitch && PITCHES.includes(b.pitch) ? b.pitch : "6/12";
-    const sqWithWaste = roundUpToThird(squares * 1.15);
+    const wasteV = reportData?.suggestedWastePercent ?? DEFAULT_WASTE_PERCENT;
+    const sqWithWaste = roundUpToThird(squares * (1 + wasteV / 100));
     const shingleQtyVal = sqWithWaste;
     const underlaymentQtyVal = roundUpToTen(sqWithWaste);
     const rakesVal = b.rakesFt ?? 0;
@@ -590,7 +593,7 @@ export default function EstimatorPage() {
       createdAt: new Date().toISOString(),
       section1Squares: squares || null,
       section1Pitch: pitch,
-      wastePercent: 15,
+      wastePercent: wasteV,
       totalSquares: squares,
       totalSquaresWithWaste: sqWithWaste,
       materialTaxRate: 0,
@@ -817,7 +820,7 @@ export default function EstimatorPage() {
     setCustomerPhone(existingEstimate.customerPhone || "");
     setCustomerEmail(existingEstimate.customerEmail || "");
     setNotes(existingEstimate.notes || "");
-    setWastePercent(String(existingEstimate.wastePercent ?? 15));
+    setWastePercent(String(existingEstimate.wastePercent ?? DEFAULT_WASTE_PERCENT));
     setMaterialTaxRateInput(String(existingEstimate.materialTaxRate ?? 0));
     setConstructionType(existingEstimate.constructionType === "new_construction" ? "new_construction" : "reroof");
     setLayersToRemove(String(existingEstimate.layersToRemove ?? 1));

@@ -32,7 +32,7 @@ export const estimates = sqliteTable("estimates", {
   section2Pitch: text("section2_pitch"),
   section3Squares: real("section3_squares"),
   section3Pitch: text("section3_pitch"),
-  wastePercent: real("waste_percent").default(15),
+  wastePercent: real("waste_percent").default(10),
   totalSquares: real("total_squares"),
   totalSquaresWithWaste: real("total_squares_with_waste"),
   // Material Tax % — applied to every material price below (labor is untaxed)
