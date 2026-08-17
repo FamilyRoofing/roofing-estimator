@@ -682,6 +682,7 @@ export default function EstimatorPage() {
     const rakesVal = Math.ceil(b.rakesFt ?? 0);
     const eavesVal = Math.ceil(b.eavesFt ?? 0);
     const iceWaterVal = Math.ceil((b.stepFt ?? 0) + (b.valleysFt ?? 0));
+    const stepFlashingVal = Math.ceil(b.stepFt ?? 0);
     const ridgeCapVal = Math.ceil(b.ridgeCapFt ?? 0);
     const starterVal = Math.ceil(b.starterFt ?? 0);
     const ridgeVentVal = Math.ceil(b.ridgesFt ?? 0);
@@ -697,6 +698,8 @@ export default function EstimatorPage() {
     const ridgeCapMatV = num(priceDefaults?.ridgeCapMaterialPricePerUnit);
     const iceWaterPriceV = num(priceDefaults?.iceWaterPricePerUnit) || (IW_ROLL_COST / IW_ROLL_LF);
     const iceWaterMatV = num(priceDefaults?.iceWaterMaterialPricePerUnit);
+    const stepFlashingPriceV = num(priceDefaults?.stepFlashingPricePerUnit) || D.stepFlashing;
+    const stepFlashingMatV = num(priceDefaults?.stepFlashingMaterialPricePerUnit);
     const rakesPriceV = num(priceDefaults?.rakesPricePerUnit) || (DE_PIECE_COST / DE_PIECE_LF);
     const rakesMatV = num(priceDefaults?.rakesMaterialPricePerUnit);
     const eavesPriceV = num(priceDefaults?.eavesPricePerUnit) || (DE_PIECE_COST / DE_PIECE_LF);
@@ -731,6 +734,7 @@ export default function EstimatorPage() {
       + cost(starterVal, starterMatV, starterPriceV)
       + cost(ridgeCapVal, ridgeCapMatV, ridgeCapPriceV)
       + cost(iceWaterVal, iceWaterMatV, iceWaterPriceV)
+      + cost(stepFlashingVal, stepFlashingMatV, stepFlashingPriceV)
       + cost(rakesVal, rakesMatV, rakesPriceV)
       + cost(eavesVal, eavesMatV, eavesPriceV)
       + cost(ridgeVentVal, ridgeVentMatV, ridgeVentPriceV)
@@ -773,6 +777,9 @@ export default function EstimatorPage() {
       iceWaterQty: iceWaterVal || null,
       iceWaterPricePerUnit: iceWaterPriceV,
       iceWaterMaterialPricePerUnit: iceWaterMatV,
+      stepFlashingQty: stepFlashingVal || null,
+      stepFlashingPricePerUnit: stepFlashingPriceV,
+      stepFlashingMaterialPricePerUnit: stepFlashingMatV,
       rakesQty: rakesVal || null,
       rakesColor: "White",
       rakesPricePerUnit: rakesPriceV,
@@ -825,6 +832,9 @@ export default function EstimatorPage() {
     if (summary.stepFt != null || summary.valleysFt != null) {
       setIceWaterQty(String(Math.ceil((summary.stepFt ?? 0) + (summary.valleysFt ?? 0))));
     }
+    // Alum. Step Flashing is the physical metal flashing for the same step
+    // area Ice & Water Shield's membrane covers — both are needed there.
+    if (summary.stepFt != null) setStepFlashingQty(String(Math.ceil(summary.stepFt)));
     if (summary.ridgeCapFt != null) setRidgeCapQty(String(Math.ceil(summary.ridgeCapFt)));
     if (summary.starterFt != null) setStarterQty(String(Math.ceil(summary.starterFt)));
     if (summary.ridgesFt != null) setRidgeVentQty(String(Math.ceil(summary.ridgesFt)));
@@ -1255,12 +1265,13 @@ export default function EstimatorPage() {
                 <ReportReviewRow label="Eaves" value={summary.eavesFt != null ? `${summary.eavesFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Rakes" value={summary.rakesFt != null ? `${summary.rakesFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Ice & Water Shield (step + valleys)" value={(summary.stepFt != null || summary.valleysFt != null) ? `${((summary.stepFt ?? 0) + (summary.valleysFt ?? 0)).toLocaleString()} FT` : null} />
+                <ReportReviewRow label="Alum. Step Flashing" value={summary.stepFt != null ? `${summary.stepFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Hip & Ridge (ridge cap)" value={summary.ridgeCapFt != null ? `${summary.ridgeCapFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Starter Strip" value={summary.starterFt != null ? `${summary.starterFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Ridge Vent (ridges only, excl. hips)" value={summary.ridgesFt != null ? `${summary.ridgesFt.toLocaleString()} FT` : null} />
                 <ReportReviewRow label="Waste %" value={reportData.suggestedWastePercent != null ? `${reportData.suggestedWastePercent}% (suggested)` : `${DEFAULT_WASTE_PERCENT}% (default — none suggested)`} />
                 <p className="text-xs text-muted-foreground pt-3">
-                  This will overwrite the Address field, Waste %, Section 1's squares/pitch, and the Eaves, Rakes, Ice & Water, Hip & Ridge, Starter Strip, and Ridge Vent quantities above — all still editable afterward.
+                  This will overwrite the Address field, Waste %, Section 1's squares/pitch, and the Eaves, Rakes, Ice & Water, Alum. Step Flashing, Hip & Ridge, Starter Strip, and Ridge Vent quantities above — all still editable afterward.
                 </p>
                 {reportData.buildings.length > 1 && (
                   <div className="mt-3 pt-3 border-t border-border">
