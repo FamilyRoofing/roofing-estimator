@@ -156,8 +156,29 @@ export const estimates = sqliteTable("estimates", {
   // Referral
   referralFee: real("referral_fee"),
   referralName: text("referral_name"),
-  // Miscellaneous hidden
-  miscAmount: real("misc_amount").default(220),
+  // Shop Supplies & Fees — admin-only itemized job costs (qty is always
+  // formula-derived from other fields, never stored) that replace the old
+  // flat misc amount below. Coil nails/felt nails/caulk/paint are taxed
+  // material costs; delivery fee and the report cost are untaxed "other".
+  coilNailsPricePerUnit: real("coil_nails_price_per_unit"),
+  feltNailsPricePerUnit: real("felt_nails_price_per_unit"),
+  caulkPricePerUnit: real("caulk_price_per_unit"),
+  paintPricePerUnit: real("paint_price_per_unit"),
+  deliveryFeePricePerUnit: real("delivery_fee_price_per_unit"),
+  // Measurement report cost — which provider's report (if any) was
+  // imported into this estimate, and that provider's per-report cost.
+  reportSource: text("report_source"), // "gaf" | "roofr" | "eagleview" | null
+  gafReportPricePerUnit: real("gaf_report_price_per_unit"),
+  roofrReportPricePerUnit: real("roofr_report_price_per_unit"),
+  eagleviewReportPricePerUnit: real("eagleview_report_price_per_unit"),
+  // City/County — flat fee when the job site is inside city limits. The
+  // checkbox itself is visible to Sales (they know the job site); the
+  // dollar breakdown is admin-only like the rest of this section.
+  isCityJob: integer("is_city_job", { mode: "boolean" }).default(false),
+  cityFeeAmount: real("city_fee_amount"),
+  // Miscellaneous (retired — replaced by the itemized Shop Supplies & Fees
+  // above; kept for old estimates only).
+  miscAmount: real("misc_amount").default(0),
   // Totals
   subtotal: real("subtotal"),
   totalWithMisc: real("total_with_misc"),
@@ -218,6 +239,15 @@ export const priceDefaults = sqliteTable("price_defaults", {
   chimneyAverageMaterialPricePerUnit: real("chimney_average_material_price_per_unit"),
   chimneyLargePricePerUnit: real("chimney_large_price_per_unit"),
   chimneyLargeMaterialPricePerUnit: real("chimney_large_material_price_per_unit"),
+  coilNailsPricePerUnit: real("coil_nails_price_per_unit"),
+  feltNailsPricePerUnit: real("felt_nails_price_per_unit"),
+  caulkPricePerUnit: real("caulk_price_per_unit"),
+  paintPricePerUnit: real("paint_price_per_unit"),
+  deliveryFeePricePerUnit: real("delivery_fee_price_per_unit"),
+  gafReportPricePerUnit: real("gaf_report_price_per_unit"),
+  roofrReportPricePerUnit: real("roofr_report_price_per_unit"),
+  eagleviewReportPricePerUnit: real("eagleview_report_price_per_unit"),
+  cityFeeAmount: real("city_fee_amount"),
   updatedAt: text("updated_at"),
 });
 

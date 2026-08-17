@@ -196,6 +196,26 @@ _addCol("price_defaults", "rakes_price_per_unit", "REAL");
 _addCol("price_defaults", "rakes_material_price_per_unit", "REAL");
 _addCol("price_defaults", "eaves_price_per_unit", "REAL");
 _addCol("price_defaults", "eaves_material_price_per_unit", "REAL");
+_addCol("estimates", "coil_nails_price_per_unit", "REAL");
+_addCol("estimates", "felt_nails_price_per_unit", "REAL");
+_addCol("estimates", "caulk_price_per_unit", "REAL");
+_addCol("estimates", "paint_price_per_unit", "REAL");
+_addCol("estimates", "delivery_fee_price_per_unit", "REAL");
+_addCol("estimates", "report_source", "TEXT");
+_addCol("estimates", "gaf_report_price_per_unit", "REAL");
+_addCol("estimates", "roofr_report_price_per_unit", "REAL");
+_addCol("estimates", "eagleview_report_price_per_unit", "REAL");
+_addCol("estimates", "is_city_job", "INTEGER DEFAULT 0");
+_addCol("estimates", "city_fee_amount", "REAL");
+_addCol("price_defaults", "coil_nails_price_per_unit", "REAL");
+_addCol("price_defaults", "felt_nails_price_per_unit", "REAL");
+_addCol("price_defaults", "caulk_price_per_unit", "REAL");
+_addCol("price_defaults", "paint_price_per_unit", "REAL");
+_addCol("price_defaults", "delivery_fee_price_per_unit", "REAL");
+_addCol("price_defaults", "gaf_report_price_per_unit", "REAL");
+_addCol("price_defaults", "roofr_report_price_per_unit", "REAL");
+_addCol("price_defaults", "eagleview_report_price_per_unit", "REAL");
+_addCol("price_defaults", "city_fee_amount", "REAL");
 
 // ─── Seed / secure default admin account ───────────────────────────────────────
 // Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a

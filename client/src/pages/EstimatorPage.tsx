@@ -72,7 +72,6 @@ function summarizeReportBuildings(data: ReportData, excluded: Set<number>): {
 const DEFAULT_MARKUP_RATE = 0.40;
 const COMMISSION_OFFICE = 0.10;
 const COMMISSION_SELF   = 0.14;
-const MISC_AMOUNT       = 220; // $200 overhead + $20 EagleView — always hidden
 
 const PITCHES = ["3/12","4/12","5/12","6/12","7/12","8/12","9/12","10/12","11/12","12/12","13/12","14/12"];
 
@@ -135,7 +134,28 @@ const D = {
   trimCoil:     3.14,    // 2*1.07+1  (note: spreadsheet has 3.14, not 5.21)
   pipeBoot:     12.84,   // 12*1.07
   decking:      40.00,   // 25+15
+  coilNails:    48.25,   // per box
+  feltNails:    28,      // per bucket
+  caulk:        8.36,    // per tube
+  paint:        8.41,    // per can
+  deliveryFee:  60,      // per order
+  cityFee:      100,     // flat, when the job is inside city limits
+  gafReport:    20,      // per GAF QuickMeasure report imported
+  roofrReport:  18,      // per Roofr report imported
+  eagleviewReport: 40,   // per EagleView report imported
 };
+
+// Shop Supplies & Fees — replaces the old flat misc amount with itemized,
+// always-on job costs (admin-only, hidden from the Sales view). Box/bucket
+// counts round up with a small grace period past the nominal per-unit
+// coverage, matching how these are actually ordered.
+function coilNailBoxes(shingleSquares: number): number {
+  return shingleSquares > 0 ? Math.max(1, Math.ceil((shingleSquares - 4) / 16)) : 0;
+}
+function feltNailBuckets(underlaymentSquares: number): number {
+  return underlaymentSquares > 0 ? Math.max(1, Math.ceil((underlaymentSquares - 5) / 24)) : 0;
+}
+const CAULK_TUBES_PER_CHIMNEY: Record<"small" | "average" | "large", number> = { small: 2, average: 3, large: 4 };
 
 const CONSTRUCTION_TYPES: { value: "reroof" | "new_construction"; label: string }[] = [
   { value: "reroof", label: "Replacement" },
@@ -333,6 +353,25 @@ export default function EstimatorPage() {
   const [referralFee, setReferralFee] = useState<0 | 100 | 200>(0);
   const [referralName, setReferralName] = useState("");
 
+  // Shop Supplies & Fees — admin-only, formula-driven quantities (see
+  // coilNailBoxes/feltNailBuckets above); only the $/unit rates are stored.
+  const [coilNailsPrice, setCoilNailsPrice] = useState(String(D.coilNails));
+  const [feltNailsPrice, setFeltNailsPrice] = useState(String(D.feltNails));
+  const [caulkPrice, setCaulkPrice] = useState(String(D.caulk));
+  const [paintPrice, setPaintPrice] = useState(String(D.paint));
+  const [deliveryFeePrice, setDeliveryFeePrice] = useState(String(D.deliveryFee));
+  // Measurement report cost — which provider's report (if any) was
+  // imported, and each provider's editable per-report rate.
+  const [reportSource, setReportSource] = useState<ReportSource | null>(null);
+  const [gafReportPrice, setGafReportPrice] = useState(String(D.gafReport));
+  const [roofrReportPrice, setRoofrReportPrice] = useState(String(D.roofrReport));
+  const [eagleviewReportPrice, setEagleviewReportPrice] = useState(String(D.eagleviewReport));
+  // City/County — flat fee when the job site is inside city limits. The
+  // checkbox is visible to Sales (they know the job site); the $ amount
+  // itself stays admin-only like the rest of this section.
+  const [isCityJob, setIsCityJob] = useState(false);
+  const [cityFeeAmount, setCityFeeAmount] = useState(String(D.cityFee));
+
   const [deckingQty, setDeckingQty] = useState("");
   const [deckingPrice, setDeckingPrice] = useState(String(D.decking));
   const [deckingMaterialPrice, setDeckingMaterialPrice] = useState("0");
@@ -436,11 +475,29 @@ export default function EstimatorPage() {
   const layersRate  = constructionType === "reroof" ? 30 * Math.max(0, num(layersToRemove) - 1) : 0;
   const layersTotal = totalWithWaste * layersRate;
 
+  // ─── Shop Supplies & Fees (admin-only, formula-driven) ─────────────────────
+  const coilNailsQty   = coilNailBoxes(num(shingleQty));
+  const coilNailsTotal = costOf(coilNailsQty, num(coilNailsPrice), 0);
+  const feltNailsQty   = feltNailBuckets(num(underlaymentQty));
+  const feltNailsTotal = costOf(feltNailsQty, num(feltNailsPrice), 0);
+  const caulkQty = 2 + chimneys.reduce((s, c) => s + c.qty * CAULK_TUBES_PER_CHIMNEY[c.size], 0);
+  const caulkTotal = costOf(caulkQty, num(caulkPrice), 0);
+  const paintQty = 2;
+  const paintTotal = costOf(paintQty, num(paintPrice), 0);
+  const deliveryFeeTotal = num(deliveryFeePrice);
+  const reportCostRate =
+    reportSource === "gaf" ? num(gafReportPrice) :
+    reportSource === "roofr" ? num(roofrReportPrice) :
+    reportSource === "eagleview" ? num(eagleviewReportPrice) : 0;
+  const reportCostTotal = reportSource ? reportCostRate : 0;
+  const cityFeeTotal = isCityJob ? num(cityFeeAmount) : 0;
+  const shopSuppliesTotal = coilNailsTotal + feltNailsTotal + caulkTotal + paintTotal + deliveryFeeTotal + reportCostTotal + cityFeeTotal;
+
   // ─── Markup model ─────────────────────────────────────────────────────────
   const A = shingleTotal + landmarkProTotal + newConstructionDiscountTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
     ridgeCapTotal + iceWaterTotal + rakesTotal + eavesTotal + stepFlashTotal +
     trimCoilTotal + pipeBootsTotal + chimneysTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
-    ridgeVentTotal + deckingTotal + flintlasticTotal + fourStarWarrantyTotal + layersTotal + referralFee + MISC_AMOUNT;
+    ridgeVentTotal + deckingTotal + flintlasticTotal + fourStarWarrantyTotal + layersTotal + referralFee + shopSuppliesTotal;
   const B = A * markupRate;
   const E = A + B;
   // Commission is X% of Total Price: Total = E / (1 - rate), F = Total * rate
@@ -572,6 +629,27 @@ export default function EstimatorPage() {
     const ridgeVentPriceV = num(priceDefaults?.ventilationPricePerUnit) || (RV_PIECE_COST / RV_PIECE_LF);
     const ridgeVentMatV = num(priceDefaults?.ventilationMaterialPricePerUnit);
 
+    // Shop Supplies & Fees — same formulas as the main estimate, using
+    // price-book defaults. No chimney data exists for a freshly split-out
+    // building, so caulk falls back to the flat 2-tube minimum.
+    const coilNailsQtyV = coilNailBoxes(shingleQtyVal);
+    const coilNailsPriceV = num(priceDefaults?.coilNailsPricePerUnit) || D.coilNails;
+    const feltNailsQtyV = feltNailBuckets(underlaymentQtyVal);
+    const feltNailsPriceV = num(priceDefaults?.feltNailsPricePerUnit) || D.feltNails;
+    const caulkQtyV = 2;
+    const caulkPriceV = num(priceDefaults?.caulkPricePerUnit) || D.caulk;
+    const paintQtyV = 2;
+    const paintPriceV = num(priceDefaults?.paintPricePerUnit) || D.paint;
+    const deliveryFeePriceV = num(priceDefaults?.deliveryFeePricePerUnit) || D.deliveryFee;
+    const reportSourceV = reportData?.source ?? null;
+    const gafReportPriceV = num(priceDefaults?.gafReportPricePerUnit) || D.gafReport;
+    const roofrReportPriceV = num(priceDefaults?.roofrReportPricePerUnit) || D.roofrReport;
+    const eagleviewReportPriceV = num(priceDefaults?.eagleviewReportPricePerUnit) || D.eagleviewReport;
+    const reportCostV =
+      reportSourceV === "gaf" ? gafReportPriceV :
+      reportSourceV === "roofr" ? roofrReportPriceV :
+      reportSourceV === "eagleview" ? eagleviewReportPriceV : 0;
+
     const cost = (qty: number, mat: number, labor: number) => qty * (mat + labor);
     const Av = cost(shingleQtyVal, shingleMatV, shinglePriceV)
       + cost(underlaymentQtyVal, underlaymentMatV, underlaymentPriceV)
@@ -581,7 +659,12 @@ export default function EstimatorPage() {
       + cost(rakesVal, rakesMatV, rakesPriceV)
       + cost(eavesVal, eavesMatV, eavesPriceV)
       + cost(ridgeVentVal, ridgeVentMatV, ridgeVentPriceV)
-      + MISC_AMOUNT;
+      + cost(coilNailsQtyV, coilNailsPriceV, 0)
+      + cost(feltNailsQtyV, feltNailsPriceV, 0)
+      + cost(caulkQtyV, caulkPriceV, 0)
+      + cost(paintQtyV, paintPriceV, 0)
+      + deliveryFeePriceV
+      + reportCostV;
     const grandTotalV = (Av + Av * DEFAULT_MARKUP_RATE) / (1 - COMMISSION_OFFICE);
 
     return {
@@ -625,7 +708,16 @@ export default function EstimatorPage() {
       ventilationQty: ridgeVentVal || null,
       ventilationPricePerUnit: ridgeVentPriceV,
       ventilationMaterialPricePerUnit: ridgeVentMatV,
-      miscAmount: MISC_AMOUNT,
+      coilNailsPricePerUnit: coilNailsPriceV,
+      feltNailsPricePerUnit: feltNailsPriceV,
+      caulkPricePerUnit: caulkPriceV,
+      paintPricePerUnit: paintPriceV,
+      deliveryFeePricePerUnit: deliveryFeePriceV,
+      reportSource: reportSourceV,
+      gafReportPricePerUnit: gafReportPriceV,
+      roofrReportPricePerUnit: roofrReportPriceV,
+      eagleviewReportPricePerUnit: eagleviewReportPriceV,
+      miscAmount: 0,
       subtotal: Av,
       totalWithMisc: grandTotalV,
       status: "draft",
@@ -636,6 +728,7 @@ export default function EstimatorPage() {
     if (!reportData) return;
     const sourceLabel = REPORT_SOURCE_LABELS[reportData.source];
     const summary = summarizeReportBuildings(reportData, splitBuildings);
+    setReportSource(reportData.source);
     if (reportData.address) setCustomerAddress(reportData.address);
     if (summary.roofAreaSqFt != null) {
       const squares = (summary.roofAreaSqFt / 100).toFixed(2);
@@ -811,6 +904,15 @@ export default function EstimatorPage() {
     set(priceDefaults.flintlasticMaterialPricePerUnit, setFlintlasticMaterialPrice);
     set(priceDefaults.fourStarWarrantyPricePerUnit, setFourStarWarrantyPrice);
     set(priceDefaults.landmarkProPricePerUnit, setLandmarkProPrice);
+    set(priceDefaults.coilNailsPricePerUnit, setCoilNailsPrice);
+    set(priceDefaults.feltNailsPricePerUnit, setFeltNailsPrice);
+    set(priceDefaults.caulkPricePerUnit, setCaulkPrice);
+    set(priceDefaults.paintPricePerUnit, setPaintPrice);
+    set(priceDefaults.deliveryFeePricePerUnit, setDeliveryFeePrice);
+    set(priceDefaults.gafReportPricePerUnit, setGafReportPrice);
+    set(priceDefaults.roofrReportPricePerUnit, setRoofrReportPrice);
+    set(priceDefaults.eagleviewReportPricePerUnit, setEagleviewReportPrice);
+    set(priceDefaults.cityFeeAmount, setCityFeeAmount);
   }, [isNew, priceDefaults]);
 
   useEffect(() => {
@@ -901,6 +1003,17 @@ export default function EstimatorPage() {
       setReferralFee(0);
     }
     setReferralName(existingEstimate.referralName || "");
+    setCoilNailsPrice(String(existingEstimate.coilNailsPricePerUnit ?? D.coilNails));
+    setFeltNailsPrice(String(existingEstimate.feltNailsPricePerUnit ?? D.feltNails));
+    setCaulkPrice(String(existingEstimate.caulkPricePerUnit ?? D.caulk));
+    setPaintPrice(String(existingEstimate.paintPricePerUnit ?? D.paint));
+    setDeliveryFeePrice(String(existingEstimate.deliveryFeePricePerUnit ?? D.deliveryFee));
+    setReportSource((existingEstimate.reportSource as ReportSource | null) ?? null);
+    setGafReportPrice(String(existingEstimate.gafReportPricePerUnit ?? D.gafReport));
+    setRoofrReportPrice(String(existingEstimate.roofrReportPricePerUnit ?? D.roofrReport));
+    setEagleviewReportPrice(String(existingEstimate.eagleviewReportPricePerUnit ?? D.eagleviewReport));
+    setIsCityJob(!!existingEstimate.isCityJob);
+    setCityFeeAmount(String(existingEstimate.cityFeeAmount ?? D.cityFee));
     if (existingEstimate.skylightsJson) {
       try { setSkylights(JSON.parse(existingEstimate.skylightsJson)); } catch {}
     }
@@ -993,7 +1106,18 @@ export default function EstimatorPage() {
     fourStarWarrantyPricePerUnit: num(fourStarWarrantyPrice),
     referralFee: referralFee || null,
     referralName: referralName || null,
-    miscAmount: MISC_AMOUNT,
+    coilNailsPricePerUnit: num(coilNailsPrice),
+    feltNailsPricePerUnit: num(feltNailsPrice),
+    caulkPricePerUnit: num(caulkPrice),
+    paintPricePerUnit: num(paintPrice),
+    deliveryFeePricePerUnit: num(deliveryFeePrice),
+    reportSource,
+    gafReportPricePerUnit: num(gafReportPrice),
+    roofrReportPricePerUnit: num(roofrReportPrice),
+    eagleviewReportPricePerUnit: num(eagleviewReportPrice),
+    isCityJob,
+    cityFeeAmount: num(cityFeeAmount),
+    miscAmount: 0,
     subtotal: A,
     totalWithMisc: grandTotal,
     status: "draft",
@@ -1124,6 +1248,10 @@ export default function EstimatorPage() {
                   <Input value={customerPhone} onChange={e => handlePhoneChange(e.target.value)} placeholder="(864) 555-0100" /></div>
                 <div><Label className="text-xs mb-1 block">Email</Label>
                   <Input value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} placeholder="customer@email.com" /></div>
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <Checkbox checked={isCityJob} onCheckedChange={v => setIsCityJob(!!v)} />
+                <span className="text-sm">In City Limits</span>
               </div>
             </div>
 
@@ -1563,6 +1691,10 @@ export default function EstimatorPage() {
                 <div><Label className="text-xs mb-1 block">Email</Label>
                   <Input value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} placeholder="customer@email.com" /></div>
               </div>
+              <div className="flex items-center gap-2 mt-3">
+                <Checkbox checked={isCityJob} onCheckedChange={v => setIsCityJob(!!v)} />
+                <span className="text-sm">In City Limits (+{fmt(num(cityFeeAmount))})</span>
+              </div>
             </div>
 
             {/* Roof Measurements */}
@@ -1807,6 +1939,36 @@ export default function EstimatorPage() {
                 materialPrice={deckingMaterialPrice} setMaterialPrice={setDeckingMaterialPrice}
                 laborPrice={deckingPrice} setLaborPrice={setDeckingPrice} total={deckingTotal}
               />
+
+              {/* Shop Supplies & Fees — admin-only, hidden from Sales entirely.
+                  Quantities are all formula-derived (read-only); only the
+                  $/unit rates are editable. Replaces the old flat misc amount. */}
+              <Separator className="my-2" />
+              <GroupLabel>Shop Supplies & Fees</GroupLabel>
+              {coilNailsQty > 0 && (
+                <ARow label="Coil Nails" qty={String(coilNailsQty)} setQty={() => {}} unit="Box"
+                  price={coilNailsPrice} setPrice={setCoilNailsPrice} total={coilNailsTotal} readonlyQty />
+              )}
+              {feltNailsQty > 0 && (
+                <ARow label="Felt Nails (button caps)" qty={String(feltNailsQty)} setQty={() => {}} unit="Bucket"
+                  price={feltNailsPrice} setPrice={setFeltNailsPrice} total={feltNailsTotal} readonlyQty />
+              )}
+              <ARow label="Caulk" qty={String(caulkQty)} setQty={() => {}} unit="Tube"
+                price={caulkPrice} setPrice={setCaulkPrice} total={caulkTotal} readonlyQty />
+              <ARow label="Paint" qty={String(paintQty)} setQty={() => {}} unit="Can"
+                price={paintPrice} setPrice={setPaintPrice} total={paintTotal} readonlyQty />
+              <ARow label="Delivery Fee" qty="1" setQty={() => {}} unit="Order"
+                price={deliveryFeePrice} setPrice={setDeliveryFeePrice} total={deliveryFeeTotal} readonlyQty />
+              {reportSource && (
+                <ARow label={`Measurement Report (${REPORT_SOURCE_LABELS[reportSource]})`} qty="1" setQty={() => {}} unit="Report"
+                  price={reportSource === "gaf" ? gafReportPrice : reportSource === "roofr" ? roofrReportPrice : eagleviewReportPrice}
+                  setPrice={reportSource === "gaf" ? setGafReportPrice : reportSource === "roofr" ? setRoofrReportPrice : setEagleviewReportPrice}
+                  total={reportCostTotal} readonlyQty />
+              )}
+              {isCityJob && (
+                <ARow label="City Permit Fee" qty="1" setQty={() => {}} unit="Job"
+                  price={cityFeeAmount} setPrice={setCityFeeAmount} total={cityFeeTotal} readonlyQty />
+              )}
 
               {/* Referral Fee — admin view */}
               <Separator className="my-2" />
