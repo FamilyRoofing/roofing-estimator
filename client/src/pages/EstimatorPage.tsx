@@ -677,12 +677,14 @@ export default function EstimatorPage() {
     const sqWithWaste = roundUpToThird(squares * (1 + wasteV / 100));
     const shingleQtyVal = sqWithWaste;
     const underlaymentQtyVal = roundUpToTen(sqWithWaste);
-    const rakesVal = b.rakesFt ?? 0;
-    const eavesVal = b.eavesFt ?? 0;
-    const iceWaterVal = (b.stepFt ?? 0) + (b.valleysFt ?? 0);
-    const ridgeCapVal = b.ridgeCapFt ?? 0;
-    const starterVal = b.starterFt ?? 0;
-    const ridgeVentVal = b.ridgesFt ?? 0;
+    // Report footage is always rounded up to the next whole foot — see the
+    // matching note in applyReportData.
+    const rakesVal = Math.ceil(b.rakesFt ?? 0);
+    const eavesVal = Math.ceil(b.eavesFt ?? 0);
+    const iceWaterVal = Math.ceil((b.stepFt ?? 0) + (b.valleysFt ?? 0));
+    const ridgeCapVal = Math.ceil(b.ridgeCapFt ?? 0);
+    const starterVal = Math.ceil(b.starterFt ?? 0);
+    const ridgeVentVal = Math.ceil(b.ridgesFt ?? 0);
 
     const brandPricesV = priceForBrand(brand, priceDefaults);
     const shinglePriceV = brandPricesV.shingleLabor;
@@ -813,16 +815,19 @@ export default function EstimatorPage() {
         return next;
       });
     }
-    if (summary.rakesFt != null) setRakesQty(String(summary.rakesFt));
-    if (summary.eavesFt != null) setEavesQty(String(summary.eavesFt));
+    // Report footage is always rounded up to the next whole foot — reports
+    // give fractional feet (e.g. from "Xft Yin" conversions) that don't
+    // reflect how these materials are actually ordered/measured on site.
+    if (summary.rakesFt != null) setRakesQty(String(Math.ceil(summary.rakesFt)));
+    if (summary.eavesFt != null) setEavesQty(String(Math.ceil(summary.eavesFt)));
     // Ice & Water Shield coverage is step flashing + valleys, not the
     // report's generic "Leak Barrier" figure.
     if (summary.stepFt != null || summary.valleysFt != null) {
-      setIceWaterQty(String((summary.stepFt ?? 0) + (summary.valleysFt ?? 0)));
+      setIceWaterQty(String(Math.ceil((summary.stepFt ?? 0) + (summary.valleysFt ?? 0))));
     }
-    if (summary.ridgeCapFt != null) setRidgeCapQty(String(summary.ridgeCapFt));
-    if (summary.starterFt != null) setStarterQty(String(summary.starterFt));
-    if (summary.ridgesFt != null) setRidgeVentQty(String(summary.ridgesFt));
+    if (summary.ridgeCapFt != null) setRidgeCapQty(String(Math.ceil(summary.ridgeCapFt)));
+    if (summary.starterFt != null) setStarterQty(String(Math.ceil(summary.starterFt)));
+    if (summary.ridgesFt != null) setRidgeVentQty(String(Math.ceil(summary.ridgesFt)));
     setWastePercent(String(reportData.suggestedWastePercent ?? DEFAULT_WASTE_PERCENT));
 
     const splitEntries = reportData.buildings
@@ -1412,15 +1417,10 @@ export default function EstimatorPage() {
 
             {/* Materials — quantities only, no prices */}
             <div className="section-card">
-              <div className="section-header">Materials — Quantities</div>
-              <div className="grid grid-cols-12 gap-2 mb-2 text-xs font-semibold text-muted-foreground border-b border-border pb-2">
-                <div className="col-span-7">Item</div>
-                <div className="col-span-3 text-center">Qty</div>
-                <div className="col-span-2 text-center">Unit</div>
-              </div>
+              <div className="section-header">Materials</div>
 
               <SalesGroupLabel>Shingles</SalesGroupLabel>
-              {/* Brand / shingle type / color */}
+              {/* Brand / shingle type */}
               <div className="grid grid-cols-12 gap-2 items-center mb-2">
                 <div className="col-span-7 text-sm font-medium">Brand</div>
                 <div className="col-span-5">
@@ -1436,11 +1436,12 @@ export default function EstimatorPage() {
                   <Input value={shingleType} onChange={e => setShingleType(e.target.value)} placeholder="Shingle type..." className="text-sm h-8" />
                 </div>
               </div>
-              <div className="grid grid-cols-12 gap-2 items-center mb-2">
-                <div className="col-span-7 text-sm font-medium">Color</div>
-                <div className="col-span-5">
-                  <Input value={shingleColor} onChange={e => setShingleColor(e.target.value)} placeholder="Color..." className="text-sm h-8" />
-                </div>
+
+              <SalesGroupLabel>Quantities</SalesGroupLabel>
+              <div className="grid grid-cols-12 gap-2 mb-2 text-xs font-semibold text-muted-foreground border-b border-border pb-2">
+                <div className="col-span-7">Item</div>
+                <div className="col-span-3 text-center">Qty</div>
+                <div className="col-span-2 text-center">Unit</div>
               </div>
               <SalesQtyRow label={shingleType} qty={shingleQty} setQty={setShingleQty} unit="SQ" />
 
@@ -1853,8 +1854,7 @@ export default function EstimatorPage() {
 
             {/* Materials Table */}
             <div className="section-card">
-              <div className="section-header">Materials & Costs</div>
-              <ColHeaders />
+              <div className="section-header">Materials</div>
 
               {/* Shingles */}
               <GroupLabel>Shingles</GroupLabel>
@@ -1869,13 +1869,13 @@ export default function EstimatorPage() {
               </div>
               <div className="grid grid-cols-12 gap-2 items-center mb-2">
                 <div className="col-span-4 text-sm font-medium">Shingle Type</div>
-                <div className="col-span-4">
+                <div className="col-span-8">
                   <Input value={shingleType} onChange={e => setShingleType(e.target.value)} placeholder="Shingle type..." className="text-sm h-8" />
                 </div>
-                <div className="col-span-4">
-                  <Input value={shingleColor} onChange={e => setShingleColor(e.target.value)} placeholder="Color..." className="text-sm h-8" />
-                </div>
               </div>
+
+              <GroupLabel>Quantities</GroupLabel>
+              <ColHeaders />
               <MLRow label={shingleType} qty={shingleQty} setQty={setShingleQty} unit="SQ" materialPrice={shingleMaterialPrice} setMaterialPrice={setShingleMaterialPrice} laborPrice={shinglePrice} setLaborPrice={setShinglePrice} total={shingleTotal} />
               {steepPitchAdderTotal > 0 && (
                 <ARow label={`Steep Pitch (+$${totalSteepAdderPerSq.toFixed(0)}/SQ)`} qty={shingleQty} setQty={() => {}} unit="SQ" price={totalSteepAdderPerSq.toFixed(2)} setPrice={() => {}} total={steepPitchAdderTotal} readonlyQty readonlyPrice highlight />
