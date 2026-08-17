@@ -45,7 +45,12 @@ export const estimates = sqliteTable("estimates", {
   layersToRemove: real("layers_to_remove").default(1),
   layersQty: real("layers_qty"),
   layersPricePerUnit: real("layers_price_per_unit"),
-  // Shingle
+  // Shingle — brand determines the auto-filled base/premium product names
+  // (see BASE_SHINGLE_BY_BRAND/PREMIUM_SHINGLE_BY_BRAND on the Estimator
+  // page); the price fields below hold whatever was actually charged on
+  // this specific job, regardless of brand. Each brand's own remembered
+  // default rate lives on price_defaults instead (see below).
+  brand: text("brand").default("certainteed"), // "certainteed"|"owensCorning"|"gaf"|"atlas"|"iko"|"tamko"
   shingleType: text("shingle_type"),
   shingleColor: text("shingle_color"),
   shingleQty: real("shingle_qty"),
@@ -53,9 +58,11 @@ export const estimates = sqliteTable("estimates", {
   shingleMaterialPricePerSq: real("shingle_material_price_per_sq"),
   landmarkProUpcharge: real("landmark_pro_upcharge"), // retired — kept for old estimates
   landmarkProQty: real("landmark_pro_qty"), // retired — kept for old estimates
-  // Landmark PRO — bottom-of-report add-on (see Estimator page): qty is
-  // always totalWithWaste, not stored. Only counts toward the total when
-  // includeLandmarkPro is true.
+  // Premium shingle upgrade (e.g. Landmark PRO for CertainTeed, Timberline
+  // HDZ for GAF) — bottom-of-report add-on: qty is always totalWithWaste,
+  // not stored. Only counts toward the total when includeLandmarkPro is
+  // true. Column names kept as "landmarkPro*" for backward compatibility —
+  // the field represents whichever brand's premium line was actually used.
   includeLandmarkPro: integer("include_landmark_pro", { mode: "boolean" }).default(false),
   landmarkProPricePerUnit: real("landmark_pro_price_per_unit"),
   // Synthetic Underlayment
@@ -196,8 +203,31 @@ export type Estimate = typeof estimates.$inferSelect;
 // start from the most recently saved numbers instead of the hardcoded ones.
 export const priceDefaults = sqliteTable("price_defaults", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  shinglePricePerSq: real("shingle_price_per_sq"),
-  shingleMaterialPricePerSq: real("shingle_material_price_per_sq"),
+  shinglePricePerSq: real("shingle_price_per_sq"), // legacy — CertainTeed fallback only, see certainteedShinglePricePerSq below
+  shingleMaterialPricePerSq: real("shingle_material_price_per_sq"), // legacy — CertainTeed fallback only
+  // Per-brand shingle pricing — each brand (base line + premium upgrade)
+  // remembers its own rate separately, since switching brands on a new job
+  // shouldn't carry over another brand's price. CertainTeed additionally
+  // falls back to the legacy fields above when unset, to preserve pricing
+  // saved before multi-brand support existed.
+  certainteedShinglePricePerSq: real("certainteed_shingle_price_per_sq"),
+  certainteedShingleMaterialPricePerSq: real("certainteed_shingle_material_price_per_sq"),
+  certainteedPremiumPricePerUnit: real("certainteed_premium_price_per_unit"),
+  owensCorningShinglePricePerSq: real("owens_corning_shingle_price_per_sq"),
+  owensCorningShingleMaterialPricePerSq: real("owens_corning_shingle_material_price_per_sq"),
+  owensCorningPremiumPricePerUnit: real("owens_corning_premium_price_per_unit"),
+  gafShinglePricePerSq: real("gaf_shingle_price_per_sq"),
+  gafShingleMaterialPricePerSq: real("gaf_shingle_material_price_per_sq"),
+  gafPremiumPricePerUnit: real("gaf_premium_price_per_unit"),
+  atlasShinglePricePerSq: real("atlas_shingle_price_per_sq"),
+  atlasShingleMaterialPricePerSq: real("atlas_shingle_material_price_per_sq"),
+  atlasPremiumPricePerUnit: real("atlas_premium_price_per_unit"),
+  ikoShinglePricePerSq: real("iko_shingle_price_per_sq"),
+  ikoShingleMaterialPricePerSq: real("iko_shingle_material_price_per_sq"),
+  ikoPremiumPricePerUnit: real("iko_premium_price_per_unit"),
+  tamkoShinglePricePerSq: real("tamko_shingle_price_per_sq"),
+  tamkoShingleMaterialPricePerSq: real("tamko_shingle_material_price_per_sq"),
+  tamkoPremiumPricePerUnit: real("tamko_premium_price_per_unit"),
   underlaymentPricePerSq: real("underlayment_price_per_sq"),
   underlaymentMaterialPricePerSq: real("underlayment_material_price_per_sq"),
   starterPricePerUnit: real("starter_price_per_unit"),

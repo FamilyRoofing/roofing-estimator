@@ -216,6 +216,25 @@ _addCol("price_defaults", "gaf_report_price_per_unit", "REAL");
 _addCol("price_defaults", "roofr_report_price_per_unit", "REAL");
 _addCol("price_defaults", "eagleview_report_price_per_unit", "REAL");
 _addCol("price_defaults", "city_fee_amount", "REAL");
+_addCol("estimates", "brand", "TEXT DEFAULT 'certainteed'");
+_addCol("price_defaults", "certainteed_shingle_price_per_sq", "REAL");
+_addCol("price_defaults", "certainteed_shingle_material_price_per_sq", "REAL");
+_addCol("price_defaults", "certainteed_premium_price_per_unit", "REAL");
+_addCol("price_defaults", "owens_corning_shingle_price_per_sq", "REAL");
+_addCol("price_defaults", "owens_corning_shingle_material_price_per_sq", "REAL");
+_addCol("price_defaults", "owens_corning_premium_price_per_unit", "REAL");
+_addCol("price_defaults", "gaf_shingle_price_per_sq", "REAL");
+_addCol("price_defaults", "gaf_shingle_material_price_per_sq", "REAL");
+_addCol("price_defaults", "gaf_premium_price_per_unit", "REAL");
+_addCol("price_defaults", "atlas_shingle_price_per_sq", "REAL");
+_addCol("price_defaults", "atlas_shingle_material_price_per_sq", "REAL");
+_addCol("price_defaults", "atlas_premium_price_per_unit", "REAL");
+_addCol("price_defaults", "iko_shingle_price_per_sq", "REAL");
+_addCol("price_defaults", "iko_shingle_material_price_per_sq", "REAL");
+_addCol("price_defaults", "iko_premium_price_per_unit", "REAL");
+_addCol("price_defaults", "tamko_shingle_price_per_sq", "REAL");
+_addCol("price_defaults", "tamko_shingle_material_price_per_sq", "REAL");
+_addCol("price_defaults", "tamko_premium_price_per_unit", "REAL");
 
 // ─── Seed / secure default admin account ───────────────────────────────────────
 // Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a

@@ -82,9 +82,79 @@ function pitchAdderPerSq(pitch: string): number {
   return n > 8 ? (n - 8) * 5 : 0;
 }
 const DRIP_EDGE_COLORS = ["White","Black","Brown","Almond","Mill Finish"];
-const SHINGLE_TYPES = ["Landmark"];
 const DECKING_THICKNESSES = ["7/16\"","15/32\"","19/32\"","23/32\""];
 const DECKING_TYPES = ["Plywood","OSB"];
+
+// ─── Shingle brands ───────────────────────────────────────────────────────────
+// Picking a brand auto-fills the base shingle's product name and determines
+// which product name shows on the premium upgrade line. Each brand also
+// remembers its own base/premium $/unit rates separately in the shared price
+// book (see priceForBrand below) — switching brands shouldn't carry over
+// another brand's pricing.
+type ShingleBrand = "certainteed" | "owensCorning" | "gaf" | "atlas" | "iko" | "tamko";
+const SHINGLE_BRANDS: { value: ShingleBrand; label: string }[] = [
+  { value: "certainteed", label: "CertainTeed" },
+  { value: "owensCorning", label: "Owens Corning" },
+  { value: "gaf", label: "GAF" },
+  { value: "atlas", label: "Atlas" },
+  { value: "iko", label: "IKO" },
+  { value: "tamko", label: "Tamko" },
+];
+const BASE_SHINGLE_BY_BRAND: Record<ShingleBrand, string> = {
+  certainteed: "Landmark",
+  owensCorning: "Oakridge",
+  gaf: "Natural Shadow",
+  atlas: "ProLam",
+  iko: "Cambridge",
+  tamko: "Heritage",
+};
+const PREMIUM_SHINGLE_BY_BRAND: Record<ShingleBrand, string> = {
+  certainteed: "Landmark PRO",
+  owensCorning: "Duration",
+  gaf: "Timberline HDZ",
+  atlas: "Pinnacle Pristine",
+  iko: "Dynasty",
+  tamko: "Titan XT",
+};
+
+// Each brand's remembered base ($/SQ material + labor) and premium ($/unit)
+// rates from the shared price book. CertainTeed falls back to the old
+// generic shingle/landmarkPro fields when its own slot is unset, to
+// preserve pricing saved before multi-brand support existed.
+function priceForBrand(brand: ShingleBrand, pd: PriceDefaults | undefined) {
+  switch (brand) {
+    case "certainteed": return {
+      shingleLabor: num(pd?.certainteedShinglePricePerSq) || num(pd?.shinglePricePerSq) || D.shingle,
+      shingleMaterial: num(pd?.certainteedShingleMaterialPricePerSq) || num(pd?.shingleMaterialPricePerSq),
+      premium: num(pd?.certainteedPremiumPricePerUnit) || num(pd?.landmarkProPricePerUnit) || D.premiumShingle,
+    };
+    case "owensCorning": return {
+      shingleLabor: num(pd?.owensCorningShinglePricePerSq) || D.shingle,
+      shingleMaterial: num(pd?.owensCorningShingleMaterialPricePerSq),
+      premium: num(pd?.owensCorningPremiumPricePerUnit) || D.premiumShingle,
+    };
+    case "gaf": return {
+      shingleLabor: num(pd?.gafShinglePricePerSq) || D.shingle,
+      shingleMaterial: num(pd?.gafShingleMaterialPricePerSq),
+      premium: num(pd?.gafPremiumPricePerUnit) || D.premiumShingle,
+    };
+    case "atlas": return {
+      shingleLabor: num(pd?.atlasShinglePricePerSq) || D.shingle,
+      shingleMaterial: num(pd?.atlasShingleMaterialPricePerSq),
+      premium: num(pd?.atlasPremiumPricePerUnit) || D.premiumShingle,
+    };
+    case "iko": return {
+      shingleLabor: num(pd?.ikoShinglePricePerSq) || D.shingle,
+      shingleMaterial: num(pd?.ikoShingleMaterialPricePerSq),
+      premium: num(pd?.ikoPremiumPricePerUnit) || D.premiumShingle,
+    };
+    case "tamko": return {
+      shingleLabor: num(pd?.tamkoShinglePricePerSq) || D.shingle,
+      shingleMaterial: num(pd?.tamkoShingleMaterialPricePerSq),
+      premium: num(pd?.tamkoPremiumPricePerUnit) || D.premiumShingle,
+    };
+  }
+}
 
 // ─── Bundle / roll / piece helpers (match spreadsheet ROUNDUP formulas) ──────
 // These compute the TOTAL cost for a given quantity, rounding up to whole units.
@@ -129,6 +199,7 @@ const RV_PIECE_COST = 9.25 * 1.07 + 4;   // $13.8975
 // Fixed per-unit items (no bundling logic needed)
 const D = {
   shingle:      193.56,  // up to 8/12: 70+108*1.07+8
+  premiumShingle: 15,    // default $/SQ for a brand's premium upgrade line, until admin sets one
   proUpcharge:  20,
   stepFlashing: 4.82,    // 1.75+1.07+2
   trimCoil:     3.14,    // 2*1.07+1  (note: spreadsheet has 3.14, not 5.21)
@@ -274,6 +345,7 @@ export default function EstimatorPage() {
   const wasteMultiplier = 1 + num(wastePercent) / 100;
   const totalWithWaste = roundUpToThird(totalRawSq * wasteMultiplier);
 
+  const [brand, setBrand] = useState<ShingleBrand>("certainteed");
   // Materials — each item has a Labor $/unit (the historical single price) and
   // a Material $/unit (new; defaults to 0 until broken out from the labor number).
   const [shingleType, setShingleType] = useState("Landmark");
@@ -387,8 +459,8 @@ export default function EstimatorPage() {
   // Landmark PRO = total shingle SQ incl. waste; 4-Star Warranty = that same
   // figure plus starter & hip/ridge (i.e. totalSqForPrice, below). Rate is
   // editable, but neither counts toward the total unless explicitly selected.
-  const [includeLandmarkPro, setIncludeLandmarkPro] = useState(false);
-  const [landmarkProPrice, setLandmarkProPrice] = useState("15");
+  const [includePremiumShingle, setIncludePremiumShingle] = useState(false);
+  const [premiumShinglePrice, setPremiumShinglePrice] = useState(String(D.premiumShingle));
   const [includeFourStarWarranty, setIncludeFourStarWarranty] = useState(false);
   const [fourStarWarrantyPrice, setFourStarWarrantyPrice] = useState("15");
 
@@ -434,7 +506,7 @@ export default function EstimatorPage() {
   // Landmark PRO — bottom-of-report add-on: total shingle SQ incl. waste ×
   // its own $/SQ rate (no material/labor split). Only counts toward the
   // total when explicitly selected below.
-  const landmarkProTotal = includeLandmarkPro ? costOf(totalWithWaste, 0, num(landmarkProPrice)) : 0;
+  const premiumShingleTotal = includePremiumShingle ? costOf(totalWithWaste, 0, num(premiumShinglePrice)) : 0;
   // 4-Star Warranty — same idea, but based on totalSqForPrice (incl. starter
   // & hip/ridge) since that's how the warranty program measures a square.
   const fourStarWarrantyTotal = includeFourStarWarranty ? costOf(totalSqForPrice, 0, num(fourStarWarrantyPrice)) : 0;
@@ -494,7 +566,7 @@ export default function EstimatorPage() {
   const shopSuppliesTotal = coilNailsTotal + feltNailsTotal + caulkTotal + paintTotal + deliveryFeeTotal + reportCostTotal + cityFeeTotal;
 
   // ─── Markup model ─────────────────────────────────────────────────────────
-  const A = shingleTotal + landmarkProTotal + newConstructionDiscountTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
+  const A = shingleTotal + premiumShingleTotal + newConstructionDiscountTotal + steepPitchAdderTotal + underlayTotal + starterTotal +
     ridgeCapTotal + iceWaterTotal + rakesTotal + eavesTotal + stepFlashTotal +
     trimCoilTotal + pipeBootsTotal + chimneysTotal + stationaryVentsTotal + powerVentsTotal + solarVentsTotal + skylightsTotal +
     ridgeVentTotal + deckingTotal + flintlasticTotal + fourStarWarrantyTotal + layersTotal + referralFee + shopSuppliesTotal;
@@ -528,7 +600,7 @@ export default function EstimatorPage() {
   // its own marked-up + commissioned price. Same markup % and commission %
   // as the base roof — just split into two buckets instead of one, so
   // baseTotal + addOnsTotal === grandTotal exactly.
-  const addOnsRaw = rakesTotal + eavesTotal + landmarkProTotal + fourStarWarrantyTotal + skylightsTotal;
+  const addOnsRaw = rakesTotal + eavesTotal + premiumShingleTotal + fourStarWarrantyTotal + skylightsTotal;
   const baseRaw = A - addOnsRaw;
   const baseSubtotal = baseRaw * (1 + markupRate);
   const baseTotal = baseSubtotal / (1 - commissionRate);
@@ -612,8 +684,9 @@ export default function EstimatorPage() {
     const starterVal = b.starterFt ?? 0;
     const ridgeVentVal = b.ridgesFt ?? 0;
 
-    const shinglePriceV = num(priceDefaults?.shinglePricePerSq) || D.shingle;
-    const shingleMatV = num(priceDefaults?.shingleMaterialPricePerSq);
+    const brandPricesV = priceForBrand(brand, priceDefaults);
+    const shinglePriceV = brandPricesV.shingleLabor;
+    const shingleMatV = brandPricesV.shingleMaterial;
     const underlaymentPriceV = num(priceDefaults?.underlaymentPricePerSq) || (UL_ROLL_COST / UL_ROLL_SQ);
     const underlaymentMatV = num(priceDefaults?.underlaymentMaterialPricePerSq);
     const starterPriceV = num(priceDefaults?.starterPricePerUnit) || (ST_BUNDLE_COST / ST_BUNDLE_LF);
@@ -681,7 +754,8 @@ export default function EstimatorPage() {
       totalSquaresWithWaste: sqWithWaste,
       materialTaxRate: 0,
       layersToRemove: 1,
-      shingleType: "Landmark",
+      brand,
+      shingleType: BASE_SHINGLE_BY_BRAND[brand],
       shingleQty: shingleQtyVal || null,
       shinglePricePerSq: shinglePriceV,
       shingleMaterialPricePerSq: shingleMatV,
@@ -862,6 +936,18 @@ export default function EstimatorPage() {
     queryKey: ["/api/price-defaults"],
   });
 
+  // Switching brands auto-fills the base product name and swaps in that
+  // brand's own remembered base/premium prices from the shared price book —
+  // switching from CertainTeed to GAF shouldn't carry over Landmark PRO's rate.
+  function handleBrandChange(newBrand: ShingleBrand) {
+    setBrand(newBrand);
+    setShingleType(BASE_SHINGLE_BY_BRAND[newBrand]);
+    const prices = priceForBrand(newBrand, priceDefaults);
+    setShinglePrice(String(prices.shingleLabor));
+    setShingleMaterialPrice(String(prices.shingleMaterial));
+    setPremiumShinglePrice(String(prices.premium));
+  }
+
   // Prefill a brand-new estimate's material/labor prices from the shared
   // price book, so the last admin's edits carry forward automatically.
   // Existing estimates keep whatever was saved with them (handled below).
@@ -870,8 +956,10 @@ export default function EstimatorPage() {
     const set = (v: number | null | undefined, setter: (s: string) => void) => {
       if (v !== null && v !== undefined) setter(String(v));
     };
-    set(priceDefaults.shinglePricePerSq, setShinglePrice);
-    set(priceDefaults.shingleMaterialPricePerSq, setShingleMaterialPrice);
+    const brandPrices = priceForBrand(brand, priceDefaults);
+    setShinglePrice(String(brandPrices.shingleLabor));
+    setShingleMaterialPrice(String(brandPrices.shingleMaterial));
+    setPremiumShinglePrice(String(brandPrices.premium));
     set(priceDefaults.underlaymentPricePerSq, setUnderlaymentPrice);
     set(priceDefaults.underlaymentMaterialPricePerSq, setUnderlaymentMaterialPrice);
     set(priceDefaults.starterPricePerUnit, setStarterPrice);
@@ -903,7 +991,6 @@ export default function EstimatorPage() {
     set(priceDefaults.flintlasticPricePerUnit, setFlintlasticPrice);
     set(priceDefaults.flintlasticMaterialPricePerUnit, setFlintlasticMaterialPrice);
     set(priceDefaults.fourStarWarrantyPricePerUnit, setFourStarWarrantyPrice);
-    set(priceDefaults.landmarkProPricePerUnit, setLandmarkProPrice);
     set(priceDefaults.coilNailsPricePerUnit, setCoilNailsPrice);
     set(priceDefaults.feltNailsPricePerUnit, setFeltNailsPrice);
     set(priceDefaults.caulkPricePerUnit, setCaulkPrice);
@@ -926,6 +1013,7 @@ export default function EstimatorPage() {
     setMaterialTaxRateInput(String(existingEstimate.materialTaxRate ?? 0));
     setConstructionType(existingEstimate.constructionType === "new_construction" ? "new_construction" : "reroof");
     setLayersToRemove(String(existingEstimate.layersToRemove ?? 1));
+    setBrand((existingEstimate.brand as ShingleBrand) || "certainteed");
     setShingleType(existingEstimate.shingleType || "Landmark");
     setShingleColor(existingEstimate.shingleColor || "");
     setShingleQty(String(existingEstimate.shingleQty ?? ""));
@@ -993,8 +1081,8 @@ export default function EstimatorPage() {
     setFlintlasticQty(String(existingEstimate.flintlasticQty ?? ""));
     setFlintlasticPrice(String(existingEstimate.flintlasticPricePerUnit ?? 301));
     setFlintlasticMaterialPrice(String(existingEstimate.flintlasticMaterialPricePerUnit ?? 0));
-    setIncludeLandmarkPro(!!existingEstimate.includeLandmarkPro);
-    setLandmarkProPrice(String(existingEstimate.landmarkProPricePerUnit ?? 15));
+    setIncludePremiumShingle(!!existingEstimate.includeLandmarkPro);
+    setPremiumShinglePrice(String(existingEstimate.landmarkProPricePerUnit ?? D.premiumShingle));
     setIncludeFourStarWarranty(!!existingEstimate.includeFourStarWarranty);
     setFourStarWarrantyPrice(String(existingEstimate.fourStarWarrantyPricePerUnit ?? 15));
     if (existingEstimate.referralFee === 100 || existingEstimate.referralFee === 200) {
@@ -1045,12 +1133,13 @@ export default function EstimatorPage() {
     layersToRemove: num(layersToRemove) || 1,
     layersQty: totalWithWaste || null,
     layersPricePerUnit: layersRate,
+    brand,
     shingleType, shingleColor: shingleColor || null,
     shingleQty: num(shingleQty) || null,
     shinglePricePerSq: num(shinglePrice),
     shingleMaterialPricePerSq: num(shingleMaterialPrice),
-    includeLandmarkPro,
-    landmarkProPricePerUnit: num(landmarkProPrice),
+    includeLandmarkPro: includePremiumShingle,
+    landmarkProPricePerUnit: num(premiumShinglePrice),
     underlaymentQty: num(underlaymentQty) || null,
     underlaymentPricePerSq: num(underlaymentPrice),
     underlaymentMaterialPricePerSq: num(underlaymentMaterialPrice),
@@ -1331,14 +1420,20 @@ export default function EstimatorPage() {
               </div>
 
               <SalesGroupLabel>Shingles</SalesGroupLabel>
-              {/* Shingle type / color */}
+              {/* Brand / shingle type / color */}
+              <div className="grid grid-cols-12 gap-2 items-center mb-2">
+                <div className="col-span-7 text-sm font-medium">Brand</div>
+                <div className="col-span-5">
+                  <Select value={brand} onValueChange={v => handleBrandChange(v as ShingleBrand)}>
+                    <SelectTrigger className="text-sm h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>{SHINGLE_BRANDS.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div className="grid grid-cols-12 gap-2 items-center mb-2">
                 <div className="col-span-7 text-sm font-medium">Shingle Type</div>
                 <div className="col-span-5">
-                  <Select value={shingleType} onValueChange={setShingleType}>
-                    <SelectTrigger className="text-sm h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>{SHINGLE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <Input value={shingleType} onChange={e => setShingleType(e.target.value)} placeholder="Shingle type..." className="text-sm h-8" />
                 </div>
               </div>
               <div className="grid grid-cols-12 gap-2 items-center mb-2">
@@ -1599,12 +1694,12 @@ export default function EstimatorPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <Checkbox checked={includeLandmarkPro} onCheckedChange={v => setIncludeLandmarkPro(!!v)} />
-                            Landmark PRO
+                            <Checkbox checked={includePremiumShingle} onCheckedChange={v => setIncludePremiumShingle(!!v)} />
+                            {PREMIUM_SHINGLE_BY_BRAND[brand]}
                           </div>
-                          <div className="text-xs text-muted-foreground pl-6">{totalWithWaste.toFixed(2)} SQ · commission {fmtBig(itemCommission(landmarkProTotal))}</div>
+                          <div className="text-xs text-muted-foreground pl-6">{totalWithWaste.toFixed(2)} SQ · commission {fmtBig(itemCommission(premiumShingleTotal))}</div>
                         </div>
-                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(landmarkProTotal))}</span>
+                        <span className="text-lg font-bold text-foreground">{fmtBig(salesPrice(premiumShingleTotal))}</span>
                       </div>
                     )}
                     {totalWithWaste > 0 && (
@@ -1764,12 +1859,18 @@ export default function EstimatorPage() {
               {/* Shingles */}
               <GroupLabel>Shingles</GroupLabel>
               <div className="grid grid-cols-12 gap-2 items-center mb-2">
+                <div className="col-span-4 text-sm font-medium">Brand</div>
+                <div className="col-span-8">
+                  <Select value={brand} onValueChange={v => handleBrandChange(v as ShingleBrand)}>
+                    <SelectTrigger className="text-sm h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>{SHINGLE_BRANDS.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-12 gap-2 items-center mb-2">
                 <div className="col-span-4 text-sm font-medium">Shingle Type</div>
                 <div className="col-span-4">
-                  <Select value={shingleType} onValueChange={setShingleType}>
-                    <SelectTrigger className="text-sm h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>{SHINGLE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <Input value={shingleType} onChange={e => setShingleType(e.target.value)} placeholder="Shingle type..." className="text-sm h-8" />
                 </div>
                 <div className="col-span-4">
                   <Input value={shingleColor} onChange={e => setShingleColor(e.target.value)} placeholder="Color..." className="text-sm h-8" />
@@ -2077,7 +2178,7 @@ export default function EstimatorPage() {
                     <div className="flex justify-between"><span className="text-muted-foreground">Base Roof — Total Price</span><span className="font-semibold">{fmtBig(baseTotal)}</span></div>
                     <div className="flex justify-between text-muted-foreground text-xs"><span>Price per Square ({totalSqForPrice.toFixed(2)} SQ)</span><span className="font-semibold">{pricePerSq > 0 ? fmtBig(pricePerSq) + "/SQ" : "—"}</span></div>
                     <div className="flex justify-between text-green-700 dark:text-green-400"><span className="text-xs">Base Roof — Commission</span><span className="font-semibold">{fmtBig(baseCommission)}</span></div>
-                    <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Add-Ons (Rakes, Eaves, Landmark PRO, 4-Star Warranty, Skylights) — Total Price</span><span className="font-semibold">{fmtBig(addOnsTotal)}</span></div>
+                    <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Add-Ons (Rakes, Eaves, {PREMIUM_SHINGLE_BY_BRAND[brand]}, 4-Star Warranty, Skylights) — Total Price</span><span className="font-semibold">{fmtBig(addOnsTotal)}</span></div>
                     {num(rakesQty) > 0 && (
                       <div className="flex justify-between items-center text-xs text-muted-foreground pl-3 gap-2">
                         <span className="flex items-center gap-1">
@@ -2099,12 +2200,12 @@ export default function EstimatorPage() {
                     {totalWithWaste > 0 && (
                       <div className="flex justify-between items-center text-xs text-muted-foreground pl-3 gap-2">
                         <span className="flex items-center gap-1 flex-wrap">
-                          <Checkbox checked={includeLandmarkPro} onCheckedChange={v => setIncludeLandmarkPro(!!v)} className="mr-1" />
-                          Landmark PRO ({totalWithWaste.toFixed(2)} SQ × $
-                          <Input type="number" min="0" step="0.01" value={landmarkProPrice} onChange={e => setLandmarkProPrice(e.target.value)} className="h-5 w-14 text-xs px-1 inline-block" />
+                          <Checkbox checked={includePremiumShingle} onCheckedChange={v => setIncludePremiumShingle(!!v)} className="mr-1" />
+                          {PREMIUM_SHINGLE_BY_BRAND[brand]} ({totalWithWaste.toFixed(2)} SQ × $
+                          <Input type="number" min="0" step="0.01" value={premiumShinglePrice} onChange={e => setPremiumShinglePrice(e.target.value)} className="h-5 w-14 text-xs px-1 inline-block" />
                           /SQ)
                         </span>
-                        <span className="whitespace-nowrap">{fmtBig(salesPrice(landmarkProTotal))} (commission {fmtBig(itemCommission(landmarkProTotal))})</span>
+                        <span className="whitespace-nowrap">{fmtBig(salesPrice(premiumShingleTotal))} (commission {fmtBig(itemCommission(premiumShingleTotal))})</span>
                       </div>
                     )}
                     {totalWithWaste > 0 && (

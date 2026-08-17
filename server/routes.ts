@@ -42,7 +42,6 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 // Pull the material/labor price fields out of a saved estimate (plus its
 // chimneys) so they can be upserted into the shared price_defaults book.
 const PRICE_DEFAULT_KEYS = [
-  "shinglePricePerSq", "shingleMaterialPricePerSq",
   "underlaymentPricePerSq", "underlaymentMaterialPricePerSq",
   "starterPricePerUnit", "starterMaterialPricePerUnit",
   "ridgeCapPricePerUnit", "ridgeCapMaterialPricePerUnit",
@@ -59,16 +58,44 @@ const PRICE_DEFAULT_KEYS = [
   "deckingPricePerUnit", "deckingMaterialPricePerUnit",
   "flintlasticPricePerUnit", "flintlasticMaterialPricePerUnit",
   "fourStarWarrantyPricePerUnit", "fourStarWarrantyMaterialPricePerUnit",
-  "landmarkProPricePerUnit",
   "coilNailsPricePerUnit", "feltNailsPricePerUnit", "caulkPricePerUnit", "paintPricePerUnit",
   "deliveryFeePricePerUnit", "gafReportPricePerUnit", "roofrReportPricePerUnit",
   "eagleviewReportPricePerUnit", "cityFeeAmount",
 ] as const;
 
+// Shingle brand pricing isn't a flat 1:1 mapping like everything else above —
+// each brand remembers its own base ($/SQ material+labor) and premium
+// ($/unit) rate separately, keyed by whichever brand the estimate used.
+const BRAND_PRICE_FIELDS: Record<string, { labor: string; material: string; premium: string }> = {
+  certainteed: { labor: "certainteedShinglePricePerSq", material: "certainteedShingleMaterialPricePerSq", premium: "certainteedPremiumPricePerUnit" },
+  owensCorning: { labor: "owensCorningShinglePricePerSq", material: "owensCorningShingleMaterialPricePerSq", premium: "owensCorningPremiumPricePerUnit" },
+  gaf: { labor: "gafShinglePricePerSq", material: "gafShingleMaterialPricePerSq", premium: "gafPremiumPricePerUnit" },
+  atlas: { labor: "atlasShinglePricePerSq", material: "atlasShingleMaterialPricePerSq", premium: "atlasPremiumPricePerUnit" },
+  iko: { labor: "ikoShinglePricePerSq", material: "ikoShingleMaterialPricePerSq", premium: "ikoPremiumPricePerUnit" },
+  tamko: { labor: "tamkoShinglePricePerSq", material: "tamkoShingleMaterialPricePerSq", premium: "tamkoPremiumPricePerUnit" },
+};
+
 function extractPriceDefaults(data: Record<string, unknown>) {
   const out: Record<string, number> = {};
   for (const key of PRICE_DEFAULT_KEYS) {
     if (typeof data[key] === "number") out[key] = data[key] as number;
+  }
+  const brand = typeof data.brand === "string" ? data.brand : "certainteed";
+  const fields = BRAND_PRICE_FIELDS[brand] ?? BRAND_PRICE_FIELDS.certainteed;
+  if (typeof data.shinglePricePerSq === "number") {
+    out[fields.labor] = data.shinglePricePerSq;
+    // Also keep the legacy generic field current for CertainTeed, since it
+    // doubles as the pre-multi-brand fallback (see priceForBrand on the
+    // Estimator page).
+    if (brand === "certainteed") out.shinglePricePerSq = data.shinglePricePerSq;
+  }
+  if (typeof data.shingleMaterialPricePerSq === "number") {
+    out[fields.material] = data.shingleMaterialPricePerSq;
+    if (brand === "certainteed") out.shingleMaterialPricePerSq = data.shingleMaterialPricePerSq;
+  }
+  if (typeof data.landmarkProPricePerUnit === "number") {
+    out[fields.premium] = data.landmarkProPricePerUnit;
+    if (brand === "certainteed") out.landmarkProPricePerUnit = data.landmarkProPricePerUnit;
   }
   if (typeof data.chimneysJson === "string") {
     try {
