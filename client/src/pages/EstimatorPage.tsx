@@ -71,7 +71,12 @@ function summarizeReportBuildings(data: ReportData, excluded: Set<number>): {
 // Total = E / (1 - commission rate)   → commission is X% of Total
 // F     = Total × commission rate
 
-const DEFAULT_MARKUP_RATE = 0.40;
+const DEFAULT_MARKUP_RATE = 0.50;
+// Kept as a whole percentage (not a 0–1 fraction like DEFAULT_MARKUP_RATE)
+// because 0.07 * 100 lands on 7.000000000000001 in floating point — dividing
+// this by 100 where a fraction is needed round-trips cleanly, multiplying
+// does not.
+const DEFAULT_MATERIAL_TAX_PERCENT = 7;
 const COMMISSION_OFFICE = 0.10;
 const COMMISSION_SELF   = 0.14;
 
@@ -290,7 +295,7 @@ export default function EstimatorPage() {
   const markupRate = Math.max(0, Math.min(100, num(markupRateInput))) / 100;
 
   // Material Tax % — applied to every material price below (labor is untaxed)
-  const [materialTaxRateInput, setMaterialTaxRateInput] = useState("0");
+  const [materialTaxRateInput, setMaterialTaxRateInput] = useState(String(DEFAULT_MATERIAL_TAX_PERCENT));
   const materialTaxRate = Math.max(0, num(materialTaxRateInput)) / 100;
 
   // Customer
@@ -646,8 +651,8 @@ export default function EstimatorPage() {
   // mirroring what a brand-new estimate would look like if its report numbers
   // were applied and saved untouched: current price book, the report's
   // suggested waste % (falling back to the 10% default when none is
-  // suggested — same rule as the main estimate), 40% markup, office
-  // commission, no tax.
+  // suggested — same rule as the main estimate), default markup, office
+  // commission, and default material tax rate.
   const buildSplitEstimatePayload = (b: BuildingData, label: string) => {
     const squares = b.roofAreaSqFt != null ? b.roofAreaSqFt / 100 : 0;
     const pitch = b.pitch && PITCHES.includes(b.pitch) ? b.pitch : "6/12";
@@ -706,7 +711,7 @@ export default function EstimatorPage() {
       reportSourceV === "roofr" ? roofrReportPriceV :
       reportSourceV === "eagleview" ? eagleviewReportPriceV : 0;
 
-    const cost = (qty: number, mat: number, labor: number) => qty * (mat + labor);
+    const cost = (qty: number, mat: number, labor: number) => qty * (mat * (1 + DEFAULT_MATERIAL_TAX_PERCENT / 100) + labor);
     const Av = cost(shingleQtyVal, shingleMatV, shinglePriceV)
       + cost(underlaymentQtyVal, underlaymentMatV, underlaymentPriceV)
       + cost(starterVal, starterMatV, starterPriceV)
@@ -736,7 +741,7 @@ export default function EstimatorPage() {
       wastePercent: wasteV,
       totalSquares: squares,
       totalSquaresWithWaste: sqWithWaste,
-      materialTaxRate: 0,
+      materialTaxRate: DEFAULT_MATERIAL_TAX_PERCENT,
       layersToRemove: 1,
       brand,
       shingleType: BASE_SHINGLE_BY_BRAND[brand],
@@ -2110,7 +2115,7 @@ export default function EstimatorPage() {
                     onChange={e => setMarkupRateInput(e.target.value)}
                     className="text-sm w-24 h-8"
                   />
-                  <span className="text-sm text-muted-foreground">% &nbsp;(default 40%)</span>
+                  <span className="text-sm text-muted-foreground">% &nbsp;(default {DEFAULT_MARKUP_RATE * 100}%)</span>
                 </div>
               </div>
 
