@@ -8,7 +8,7 @@ import { z } from "zod";
 export const companies = sqliteTable("companies", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  slug: text("slug").notNull().unique(), // used at login to identify the company, e.g. "call-family-roofing"
+  slug: text("slug").notNull().unique(), // used at login to identify the company, e.g. "family-roofing"
   createdAt: text("created_at").notNull(),
 });
 

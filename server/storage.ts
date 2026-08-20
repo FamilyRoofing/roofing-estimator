@@ -299,7 +299,17 @@ if (usersNeedsCompanyId) {
 
 // ─── Seed the first company (existing installs pre-date multi-tenancy, so
 //     everything so far has implicitly belonged to this one company) ────────
-const DEFAULT_COMPANY_SLUG = "call-family-roofing";
+const DEFAULT_COMPANY_SLUG = "family-roofing";
+// One-time rename: the very first deploy of this migration seeded the slug
+// as "call-family-roofing" (guessed from the email domain) before the
+// company's actual name — "Family Roofing" — was confirmed. Renaming the
+// existing row (not inserting a new one) keeps the same companyId, so every
+// user/estimate/price already pointing at it stays correctly attached.
+const OLD_COMPANY_SLUG = "call-family-roofing";
+const renamed = sqlite.prepare("UPDATE companies SET slug = ? WHERE slug = ?").run(DEFAULT_COMPANY_SLUG, OLD_COMPANY_SLUG);
+if (renamed.changes > 0) {
+  console.log(`[storage] Renamed company slug from "${OLD_COMPANY_SLUG}" to "${DEFAULT_COMPANY_SLUG}".`);
+}
 let defaultCompany = sqlite
   .prepare("SELECT id FROM companies WHERE slug = ?")
   .get(DEFAULT_COMPANY_SLUG) as { id: number } | undefined;

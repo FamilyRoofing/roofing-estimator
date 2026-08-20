@@ -58,7 +58,7 @@ export default function LoginPage() {
                 autoCorrect="off"
                 value={company}
                 onChange={e => setCompany(e.target.value)}
-                placeholder="e.g. call-family-roofing"
+                placeholder="e.g. family-roofing"
                 className="mt-1"
                 data-testid="input-company"
               />
