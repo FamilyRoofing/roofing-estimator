@@ -7,9 +7,10 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import EstimatorPage from "./pages/EstimatorPage";
 import EstimatesListPage from "./pages/EstimatesListPage";
 import UsersPage from "./pages/UsersPage";
+import ShinglePricingPage from "./pages/ShinglePricingPage";
 import LoginPage from "./pages/LoginPage";
 import { Button } from "@/components/ui/button";
-import { LogOut, Users } from "lucide-react";
+import { LogOut, Users, DollarSign } from "lucide-react";
 
 // ── Authenticated shell with shared header ─────────────────────────────────
 function AuthenticatedApp() {
@@ -38,6 +39,19 @@ function AuthenticatedApp() {
               {user?.displayName}
               {user?.role === "admin" && <span className="ml-1 text-primary font-medium">(Admin)</span>}
             </span>
+
+            {user?.role === "admin" && (
+              <Button
+                variant={location === "/shingle-pricing" ? "default" : "ghost"}
+                size="sm"
+                className="gap-1.5 h-8 text-xs"
+                onClick={() => setLocation(location === "/shingle-pricing" ? "/" : "/shingle-pricing")}
+                data-testid="button-shingle-pricing"
+              >
+                <DollarSign size={13} />
+                <span className="hidden sm:inline">Pricing</span>
+              </Button>
+            )}
 
             {user?.role === "admin" && (
               <Button
@@ -72,6 +86,7 @@ function AuthenticatedApp() {
         <Route path="/new" component={EstimatorPage} />
         <Route path="/estimate/:id" component={EstimatorPage} />
         {user?.role === "admin" && <Route path="/users" component={UsersPage} />}
+        {user?.role === "admin" && <Route path="/shingle-pricing" component={ShinglePricingPage} />}
         {/* Any unmatched or no-longer-permitted route (e.g. a stale /users
             link on a non-admin's device) bounces home instead of a dead-end 404 */}
         <Route><Redirect to="/" /></Route>

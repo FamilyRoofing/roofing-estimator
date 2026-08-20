@@ -16,6 +16,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, Save, Eye, EyeOff, Plus, Trash2, Printer, Upload } from "lucide-react";
 import type { Estimate, SkylightItem, ChimneyItem, PriceDefaults } from "@shared/schema";
 import type { ReportData, BuildingData, ReportSource } from "@shared/reportTypes";
+import type { ShingleBrand } from "@shared/shingleBrands";
+import { SHINGLE_BRANDS, BASE_SHINGLE_BY_BRAND, PREMIUM_SHINGLE_BY_BRAND } from "@shared/shingleBrands";
 import { ALL_VELUX_MODELS, SKYLIGHT_INSTALL_COST, SKYLIGHT_FLASHING_COST } from "@/lib/velux";
 
 // Measurement report import (GAF QuickMeasure, Roofr, EagleView) — matches
@@ -90,32 +92,8 @@ const DECKING_TYPES = ["Plywood","OSB"];
 // which product name shows on the premium upgrade line. Each brand also
 // remembers its own base/premium $/unit rates separately in the shared price
 // book (see priceForBrand below) — switching brands shouldn't carry over
-// another brand's pricing.
-type ShingleBrand = "certainteed" | "owensCorning" | "gaf" | "atlas" | "iko" | "tamko";
-const SHINGLE_BRANDS: { value: ShingleBrand; label: string }[] = [
-  { value: "certainteed", label: "CertainTeed" },
-  { value: "owensCorning", label: "Owens Corning" },
-  { value: "gaf", label: "GAF" },
-  { value: "atlas", label: "Atlas" },
-  { value: "iko", label: "IKO" },
-  { value: "tamko", label: "Tamko" },
-];
-const BASE_SHINGLE_BY_BRAND: Record<ShingleBrand, string> = {
-  certainteed: "Landmark",
-  owensCorning: "Oakridge",
-  gaf: "Natural Shadow",
-  atlas: "ProLam",
-  iko: "Cambridge",
-  tamko: "Heritage",
-};
-const PREMIUM_SHINGLE_BY_BRAND: Record<ShingleBrand, string> = {
-  certainteed: "Landmark PRO",
-  owensCorning: "Duration",
-  gaf: "Timberline HDZ",
-  atlas: "Pinnacle Pristine",
-  iko: "Dynasty",
-  tamko: "Titan XT",
-};
+// another brand's pricing. Brand metadata lives in shared/shingleBrands.ts
+// (also used by the Shingle Pricing settings page) so the two can't drift.
 
 // Each brand's remembered base ($/SQ material + labor) and premium ($/unit)
 // rates from the shared price book. CertainTeed falls back to the old

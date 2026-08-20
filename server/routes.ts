@@ -2,6 +2,8 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { insertEstimateSchema } from "@shared/schema";
+import { BRAND_PRICE_FIELDS, SHINGLE_BRANDS } from "@shared/shingleBrands";
+import type { ShingleBrand } from "@shared/shingleBrands";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import { PDFParse } from "pdf-parse";
@@ -63,25 +65,14 @@ const PRICE_DEFAULT_KEYS = [
   "eagleviewReportPricePerUnit", "cityFeeAmount",
 ] as const;
 
-// Shingle brand pricing isn't a flat 1:1 mapping like everything else above —
-// each brand remembers its own base ($/SQ material+labor) and premium
-// ($/unit) rate separately, keyed by whichever brand the estimate used.
-const BRAND_PRICE_FIELDS: Record<string, { labor: string; material: string; premium: string }> = {
-  certainteed: { labor: "certainteedShinglePricePerSq", material: "certainteedShingleMaterialPricePerSq", premium: "certainteedPremiumPricePerUnit" },
-  owensCorning: { labor: "owensCorningShinglePricePerSq", material: "owensCorningShingleMaterialPricePerSq", premium: "owensCorningPremiumPricePerUnit" },
-  gaf: { labor: "gafShinglePricePerSq", material: "gafShingleMaterialPricePerSq", premium: "gafPremiumPricePerUnit" },
-  atlas: { labor: "atlasShinglePricePerSq", material: "atlasShingleMaterialPricePerSq", premium: "atlasPremiumPricePerUnit" },
-  iko: { labor: "ikoShinglePricePerSq", material: "ikoShingleMaterialPricePerSq", premium: "ikoPremiumPricePerUnit" },
-  tamko: { labor: "tamkoShinglePricePerSq", material: "tamkoShingleMaterialPricePerSq", premium: "tamkoPremiumPricePerUnit" },
-};
-
 function extractPriceDefaults(data: Record<string, unknown>) {
   const out: Record<string, number> = {};
   for (const key of PRICE_DEFAULT_KEYS) {
     if (typeof data[key] === "number") out[key] = data[key] as number;
   }
-  const brand = typeof data.brand === "string" ? data.brand : "certainteed";
-  const fields = BRAND_PRICE_FIELDS[brand] ?? BRAND_PRICE_FIELDS.certainteed;
+  const brandKey = typeof data.brand === "string" ? data.brand : "certainteed";
+  const brand: ShingleBrand = brandKey in BRAND_PRICE_FIELDS ? (brandKey as ShingleBrand) : "certainteed";
+  const fields = BRAND_PRICE_FIELDS[brand];
   if (typeof data.shinglePricePerSq === "number") {
     out[fields.labor] = data.shinglePricePerSq;
     // Also keep the legacy generic field current for CertainTeed, since it
@@ -288,6 +279,27 @@ export function registerRoutes(httpServer: Server, app: Express) {
       res.json(storage.getPriceDefaults() ?? {});
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch price defaults" });
+    }
+  });
+
+  // PUT shingle brand pricing — admin-only settings page for the per-brand
+  // base (material+labor) and premium rates every estimate's Brand selector
+  // pulls from. Scoped to just the known brand price fields (not a general
+  // price_defaults editor) so it can't be used to write arbitrary columns.
+  const SHINGLE_PRICE_FIELD_NAMES = new Set(
+    SHINGLE_BRANDS.flatMap(b => Object.values(BRAND_PRICE_FIELDS[b.value]))
+  );
+  app.put("/api/price-defaults/shingle-brands", requireAdmin, (req, res) => {
+    try {
+      const body = req.body ?? {};
+      const update: Record<string, number> = {};
+      for (const key of Array.from(SHINGLE_PRICE_FIELD_NAMES)) {
+        if (typeof body[key] === "number" && !isNaN(body[key])) update[key] = body[key];
+      }
+      const saved = storage.savePriceDefaults(update);
+      res.json(saved);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to save shingle brand pricing" });
     }
   });
 
