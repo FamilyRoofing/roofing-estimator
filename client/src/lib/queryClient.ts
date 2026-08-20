@@ -5,6 +5,13 @@ const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    if (res.status === 401) {
+      // A session can go stale mid-use (e.g. a tab left open across a
+      // migration that reshapes what's stored in it). Broadcast so
+      // AuthProvider can clear state and bounce back to the login page,
+      // instead of leaving the user stuck on a dead page re-failing saves.
+      window.dispatchEvent(new Event("auth:expired"));
+    }
     throw new Error(await extractErrorMessage(res));
   }
 }
@@ -64,6 +71,7 @@ export const getQueryFn: <T>(options: {
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+      window.dispatchEvent(new Event("auth:expired"));
       return null;
     }
 

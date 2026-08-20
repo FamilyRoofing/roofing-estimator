@@ -46,6 +46,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // A stale/expired session surfaces later as a 401 on some unrelated
+  // action (e.g. saving an estimate) — queryClient broadcasts this so we
+  // can clear state and drop back to the login page instead of leaving
+  // the user stuck on a page that will never successfully save again.
+  useEffect(() => {
+    function handleExpired() {
+      queryClient.clear();
+      setUser(null);
+    }
+    window.addEventListener("auth:expired", handleExpired);
+    return () => window.removeEventListener("auth:expired", handleExpired);
+  }, []);
+
   async function login(company: string, username: string, password: string) {
     const u = await authFetch("/api/auth/login", {
       method: "POST",

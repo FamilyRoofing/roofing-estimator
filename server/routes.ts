@@ -32,12 +32,16 @@ declare module "express-session" {
 }
 
 // ─── Auth middleware helpers ──────────────────────────────────────────────────
+// A session from before the multi-tenancy migration has userId/role but no
+// companyId — without this check it sails past auth and only fails deep
+// inside a route's `est.companyId !== req.session.companyId` comparison,
+// surfacing as a confusing generic error instead of a clean re-login prompt.
 function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
+  if (!req.session?.userId || !req.session?.companyId) return res.status(401).json({ error: "Not authenticated" });
   next();
 }
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
+  if (!req.session?.userId || !req.session?.companyId) return res.status(401).json({ error: "Not authenticated" });
   if (req.session.role !== "admin") return res.status(403).json({ error: "Admin only" });
   next();
 }
@@ -65,6 +69,13 @@ const PRICE_DEFAULT_KEYS = [
   "deliveryFeePricePerUnit", "gafReportPricePerUnit", "roofrReportPricePerUnit",
   "eagleviewReportPricePerUnit", "cityFeeAmount",
 ] as const;
+
+// People naturally type a company's display name ("Family Roofing"), not its
+// URL-safe slug ("family-roofing") — fold whitespace/underscores to hyphens
+// so the login field forgives that instead of demanding an exact slug match.
+function normalizeCompanySlug(input: string): string {
+  return input.trim().toLowerCase().replace(/[\s_]+/g, "-");
+}
 
 function extractPriceDefaults(data: Record<string, unknown>) {
   const out: Record<string, number> = {};
@@ -116,7 +127,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!company || !username || !password) {
       return res.status(400).json({ error: "Company, username, and password are required" });
     }
-    const companyRow = storage.getCompanyBySlug(String(company).trim().toLowerCase());
+    const companyRow = storage.getCompanyBySlug(normalizeCompanySlug(String(company)));
     if (!companyRow) return res.status(401).json({ error: "Invalid company, username, or password" });
     const user = storage.getUserByUsernameInCompany(companyRow.id, username.trim().toLowerCase());
     if (!user) return res.status(401).json({ error: "Invalid company, username, or password" });
