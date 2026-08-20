@@ -25,6 +25,7 @@ const reportUpload = multer({
 declare module "express-session" {
   interface SessionData {
     userId: number;
+    companyId: number;
     role: "admin" | "salesperson";
     displayName: string;
   }
@@ -111,13 +112,18 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // POST /api/auth/login
   app.post("/api/auth/login", (req, res) => {
-    const { username, password } = req.body ?? {};
-    if (!username || !password) return res.status(400).json({ error: "Username and password required" });
-    const user = storage.getUserByUsername(username.trim().toLowerCase());
-    if (!user) return res.status(401).json({ error: "Invalid username or password" });
+    const { company, username, password } = req.body ?? {};
+    if (!company || !username || !password) {
+      return res.status(400).json({ error: "Company, username, and password are required" });
+    }
+    const companyRow = storage.getCompanyBySlug(String(company).trim().toLowerCase());
+    if (!companyRow) return res.status(401).json({ error: "Invalid company, username, or password" });
+    const user = storage.getUserByUsernameInCompany(companyRow.id, username.trim().toLowerCase());
+    if (!user) return res.status(401).json({ error: "Invalid company, username, or password" });
     const ok = bcrypt.compareSync(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: "Invalid username or password" });
+    if (!ok) return res.status(401).json({ error: "Invalid company, username, or password" });
     req.session.userId = user.id;
+    req.session.companyId = user.companyId;
     req.session.role = user.role as "admin" | "salesperson";
     req.session.displayName = user.displayName;
     res.json({ id: user.id, username: user.username, role: user.role, displayName: user.displayName });
@@ -132,15 +138,17 @@ export function registerRoutes(httpServer: Server, app: Express) {
   app.get("/api/auth/me", (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ error: "Not authenticated" });
     const user = storage.getUserById(req.session.userId);
-    if (!user) return res.status(401).json({ error: "User not found" });
+    // Defensive check against a stale/tampered session — the user's actual
+    // company must still match what the session claims.
+    if (!user || user.companyId !== req.session.companyId) return res.status(401).json({ error: "User not found" });
     res.json({ id: user.id, username: user.username, role: user.role, displayName: user.displayName });
   });
 
   // ── User management (admin only) ───────────────────────────────────────────
 
   // GET /api/users
-  app.get("/api/users", requireAdmin, (_req, res) => {
-    const allUsers = storage.getAllUsers().map(u => ({
+  app.get("/api/users", requireAdmin, (req, res) => {
+    const allUsers = storage.getUsersByCompany(req.session.companyId!).map(u => ({
       id: u.id, username: u.username, role: u.role, displayName: u.displayName, createdAt: u.createdAt,
     }));
     res.json(allUsers);
@@ -152,10 +160,11 @@ export function registerRoutes(httpServer: Server, app: Express) {
     if (!username || !password || !displayName) {
       return res.status(400).json({ error: "username, password, and displayName are required" });
     }
-    const existing = storage.getUserByUsername(username.trim().toLowerCase());
+    const existing = storage.getUserByUsernameInCompany(req.session.companyId!, username.trim().toLowerCase());
     if (existing) return res.status(409).json({ error: "Username already taken" });
     const passwordHash = bcrypt.hashSync(password, 10);
     const user = storage.createUser({
+      companyId: req.session.companyId!,
       username: username.trim().toLowerCase(),
       passwordHash,
       role: role === "admin" ? "admin" : "salesperson",
@@ -169,6 +178,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
     if (id === req.session.userId) return res.status(400).json({ error: "Cannot delete yourself" });
+    const target = storage.getUserById(id);
+    if (!target || target.companyId !== req.session.companyId) return res.status(404).json({ error: "Not found" });
     storage.deleteUser(id);
     res.json({ success: true });
   });
@@ -178,6 +189,8 @@ export function registerRoutes(httpServer: Server, app: Express) {
     const id = parseInt(req.params.id);
     const { password } = req.body ?? {};
     if (isNaN(id) || !password) return res.status(400).json({ error: "Invalid request" });
+    const target = storage.getUserById(id);
+    if (!target || target.companyId !== req.session.companyId) return res.status(404).json({ error: "Not found" });
     const hash = bcrypt.hashSync(password, 10);
     storage.updateUserPassword(id, hash);
     res.json({ success: true });
@@ -185,12 +198,12 @@ export function registerRoutes(httpServer: Server, app: Express) {
 
   // ── Estimates ──────────────────────────────────────────────────────────────
 
-  // GET all estimates — admin sees all, salesperson sees only theirs
+  // GET all estimates — admin sees all in their company, salesperson sees only theirs
   app.get("/api/estimates", requireAuth, (req, res) => {
     try {
       const all = req.session.role === "admin"
-        ? storage.getAllEstimates()
-        : storage.getEstimatesByUser(req.session.userId!);
+        ? storage.getEstimatesByCompany(req.session.companyId!)
+        : storage.getEstimatesByUserInCompany(req.session.userId!, req.session.companyId!);
       res.json(all);
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch estimates" });
@@ -203,7 +216,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
       const est = storage.getEstimate(id);
-      if (!est) return res.status(404).json({ error: "Not found" });
+      // A different company's estimate ID should look identical to a
+      // nonexistent one — never confirm it exists via a 403 instead of 404.
+      if (!est || est.companyId !== req.session.companyId) return res.status(404).json({ error: "Not found" });
       // Salesperson can only see their own
       if (req.session.role !== "admin" && est.userId !== req.session.userId) {
         return res.status(403).json({ error: "Forbidden" });
@@ -214,16 +229,16 @@ export function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // POST create estimate — auto-attach userId
+  // POST create estimate — auto-attach userId and companyId
   app.post("/api/estimates", requireAuth, (req, res) => {
     try {
       const parsed = insertEstimateSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid data", details: parsed.error.flatten() });
       }
-      const data = { ...parsed.data, userId: req.session.userId! };
+      const data = { ...parsed.data, userId: req.session.userId!, companyId: req.session.companyId! };
       const created = storage.createEstimate(data);
-      storage.savePriceDefaults(extractPriceDefaults(data));
+      storage.savePriceDefaultsForCompany(req.session.companyId!, extractPriceDefaults(data));
       res.status(201).json(created);
     } catch (err) {
       res.status(500).json({ error: "Failed to create estimate" });
@@ -236,7 +251,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
       const est = storage.getEstimate(id);
-      if (!est) return res.status(404).json({ error: "Not found" });
+      if (!est || est.companyId !== req.session.companyId) return res.status(404).json({ error: "Not found" });
       if (req.session.role !== "admin" && est.userId !== req.session.userId) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -246,7 +261,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       }
       const updated = storage.updateEstimate(id, parsed.data);
       if (!updated) return res.status(404).json({ error: "Not found" });
-      storage.savePriceDefaults(extractPriceDefaults(parsed.data));
+      storage.savePriceDefaultsForCompany(req.session.companyId!, extractPriceDefaults(parsed.data));
       res.json(updated);
     } catch (err) {
       res.status(500).json({ error: "Failed to update estimate" });
@@ -259,7 +274,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
       const est = storage.getEstimate(id);
-      if (!est) return res.status(404).json({ error: "Not found" });
+      if (!est || est.companyId !== req.session.companyId) return res.status(404).json({ error: "Not found" });
       if (req.session.role !== "admin" && est.userId !== req.session.userId) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -274,9 +289,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
   //    estimate save so new estimates start from the latest numbers) ─────────
 
   // GET current price defaults
-  app.get("/api/price-defaults", requireAuth, (_req, res) => {
+  app.get("/api/price-defaults", requireAuth, (req, res) => {
     try {
-      res.json(storage.getPriceDefaults() ?? {});
+      res.json(storage.getPriceDefaultsForCompany(req.session.companyId!) ?? {});
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch price defaults" });
     }
@@ -296,7 +311,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       for (const key of Array.from(SHINGLE_PRICE_FIELD_NAMES)) {
         if (typeof body[key] === "number" && !isNaN(body[key])) update[key] = body[key];
       }
-      const saved = storage.savePriceDefaults(update);
+      const saved = storage.savePriceDefaultsForCompany(req.session.companyId!, update);
       res.json(saved);
     } catch (err) {
       res.status(500).json({ error: "Failed to save shingle brand pricing" });

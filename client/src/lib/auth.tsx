@@ -14,7 +14,7 @@ export interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (company: string, username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -46,10 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function login(username: string, password: string) {
+  async function login(company: string, username: string, password: string) {
     const u = await authFetch("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ company, username, password }),
     });
     // Discard any cached data from a previous session on this device —
     // staleTime: Infinity means a stale user's queries would otherwise

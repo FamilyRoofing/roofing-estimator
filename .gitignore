@@ -1,6 +1,7 @@
 node_modules/
 dist/
 data.db
+data.db.*-backup
 sessions.db
 *.db-shm
 *.db-wal

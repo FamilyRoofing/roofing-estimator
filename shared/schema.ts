@@ -2,10 +2,28 @@ import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// ─── Companies ──────────────────────────────────────────────────────────────
+// One row per customer company (multi-tenancy). Everything below this point
+// is scoped to a companyId so separate companies' data never mixes.
+export const companies = sqliteTable("companies", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(), // used at login to identify the company, e.g. "call-family-roofing"
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertCompanySchema = createInsertSchema(companies).omit({ id: true });
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export type Company = typeof companies.$inferSelect;
+
 // ─── Users ───────────────────────────────────────────────────────────────────
+// Username is unique per company, not globally (see server/storage.ts's users
+// table rebuild — SQLite can't ALTER a UNIQUE constraint, so this shape is
+// enforced by recreating the table, not by a simple ADD COLUMN).
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  username: text("username").notNull().unique(),
+  companyId: integer("company_id").notNull(),
+  username: text("username").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("salesperson"), // "admin" | "salesperson"
   displayName: text("display_name").notNull(),
@@ -19,6 +37,7 @@ export type User = typeof users.$inferSelect;
 // ─── Estimates ───────────────────────────────────────────────────────────────
 export const estimates = sqliteTable("estimates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  companyId: integer("company_id"), // FK → companies.id — added via _addCol, see server/storage.ts
   userId: integer("user_id"),  // FK → users.id (null = legacy/admin-created)
   customerName: text("customer_name").notNull(),
   customerAddress: text("customer_address").notNull(),
@@ -198,11 +217,13 @@ export type InsertEstimate = z.infer<typeof insertEstimateSchema>;
 export type Estimate = typeof estimates.$inferSelect;
 
 // ─── Price Defaults ────────────────────────────────────────────────────────────
-// Singleton "price book" (always row id=1). Every estimate save updates these
-// from whatever material/labor prices were used, so future new estimates
-// start from the most recently saved numbers instead of the hardcoded ones.
+// One "price book" row per company (looked up by companyId — see
+// server/storage.ts). Every estimate save updates its company's row from
+// whatever material/labor prices were used, so future new estimates start
+// from the most recently saved numbers instead of the hardcoded ones.
 export const priceDefaults = sqliteTable("price_defaults", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  companyId: integer("company_id"), // FK → companies.id — one price book per company, see server/storage.ts
   shinglePricePerSq: real("shingle_price_per_sq"), // legacy — CertainTeed fallback only, see certainteedShinglePricePerSq below
   shingleMaterialPricePerSq: real("shingle_material_price_per_sq"), // legacy — CertainTeed fallback only
   // Per-brand shingle pricing — each brand (base line + premium upgrade)

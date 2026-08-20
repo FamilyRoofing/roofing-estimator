@@ -10,16 +10,17 @@ import { LogIn } from "lucide-react";
 export default function LoginPage() {
   const { login } = useAuth();
   const { toast } = useToast();
+  const [company, setCompany] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!username.trim() || !password) return;
+    if (!company.trim() || !username.trim() || !password) return;
     setLoading(true);
     try {
-      await login(username.trim(), password);
+      await login(company.trim(), username.trim(), password);
     } catch (err: any) {
       toast({
         title: "Login failed",
@@ -49,6 +50,20 @@ export default function LoginPage() {
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
+              <Label htmlFor="company" className="text-sm">Company</Label>
+              <Input
+                id="company"
+                type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={company}
+                onChange={e => setCompany(e.target.value)}
+                placeholder="e.g. call-family-roofing"
+                className="mt-1"
+                data-testid="input-company"
+              />
+            </div>
+            <div>
               <Label htmlFor="username" className="text-sm">Username</Label>
               <Input
                 id="username"
@@ -76,7 +91,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full gap-2"
-              disabled={loading || !username.trim() || !password}
+              disabled={loading || !company.trim() || !username.trim() || !password}
               data-testid="button-login"
             >
               <LogIn size={16} />

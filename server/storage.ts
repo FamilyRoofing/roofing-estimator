@@ -3,9 +3,9 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { estimates, users, priceDefaults } from "@shared/schema";
-import { eq } from "drizzle-orm";
-import type { InsertEstimate, Estimate, User, InsertPriceDefaults, PriceDefaults } from "@shared/schema";
+import { estimates, users, priceDefaults, companies } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
+import type { InsertEstimate, Estimate, User, InsertPriceDefaults, PriceDefaults, Company } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
 // Use /data volume on Railway (persistent), fall back to local for dev
@@ -14,11 +14,34 @@ const DB_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
   : path.resolve(".");
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 const DB_PATH = path.join(DB_DIR, "data.db");
+
+// One-time safety snapshot before the multi-tenancy migration below (the
+// users table rebuild) touches real data — a plain file copy, taken before
+// any connection is opened in this process, so there's no WAL/journal to
+// worry about. Only runs once (guarded by the backup file's own existence)
+// so it doesn't accumulate a new copy on every restart. If this fails, the
+// server should NOT proceed to migrate un-backed-up data, so it's allowed
+// to throw and crash startup rather than fail silently.
+const PRE_MULTITENANCY_BACKUP_PATH = path.join(DB_DIR, "data.db.pre-multitenancy-backup");
+if (fs.existsSync(DB_PATH) && !fs.existsSync(PRE_MULTITENANCY_BACKUP_PATH)) {
+  fs.copyFileSync(DB_PATH, PRE_MULTITENANCY_BACKUP_PATH);
+  console.log(`[storage] Safety backup written to ${PRE_MULTITENANCY_BACKUP_PATH} before multi-tenancy migration.`);
+}
+
 const sqlite = new Database(DB_PATH);
 console.log("[db] using", DB_PATH);
 const db = drizzle(sqlite);
 
 // ─── Bootstrap tables (ADD COLUMN if missing, never DROP) ─────────────────────
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS companies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL
+  )
+`);
+
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -235,6 +258,59 @@ _addCol("price_defaults", "iko_premium_price_per_unit", "REAL");
 _addCol("price_defaults", "tamko_shingle_price_per_sq", "REAL");
 _addCol("price_defaults", "tamko_shingle_material_price_per_sq", "REAL");
 _addCol("price_defaults", "tamko_premium_price_per_unit", "REAL");
+_addCol("estimates", "company_id", "INTEGER DEFAULT 1");
+_addCol("price_defaults", "company_id", "INTEGER DEFAULT 1");
+
+// ─── Multi-tenancy: rebuild users for per-company username uniqueness ────────
+// SQLite can't ALTER a UNIQUE constraint, so unlike every migration above,
+// this needs an actual table rebuild — not just ADD COLUMN. Guarded to run at
+// most once by checking whether company_id already exists on the table.
+// Existing accounts and password hashes are carried over untouched.
+const usersTableInfo = sqlite.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+const usersNeedsCompanyId = !usersTableInfo.some(c => c.name === "company_id");
+if (usersNeedsCompanyId) {
+  sqlite.exec("BEGIN TRANSACTION");
+  try {
+    sqlite.exec(`
+      CREATE TABLE users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL DEFAULT 1,
+        username TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'salesperson',
+        display_name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(company_id, username)
+      )
+    `);
+    sqlite.exec(`
+      INSERT INTO users_new (id, company_id, username, password_hash, role, display_name, created_at)
+      SELECT id, 1, username, password_hash, role, display_name, created_at FROM users
+    `);
+    sqlite.exec("DROP TABLE users");
+    sqlite.exec("ALTER TABLE users_new RENAME TO users");
+    sqlite.exec("COMMIT");
+    console.log("[storage] Migrated users table: username is now unique per company, not globally.");
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    throw err;
+  }
+}
+
+// ─── Seed the first company (existing installs pre-date multi-tenancy, so
+//     everything so far has implicitly belonged to this one company) ────────
+const DEFAULT_COMPANY_SLUG = "call-family-roofing";
+let defaultCompany = sqlite
+  .prepare("SELECT id FROM companies WHERE slug = ?")
+  .get(DEFAULT_COMPANY_SLUG) as { id: number } | undefined;
+if (!defaultCompany) {
+  const result = sqlite.prepare(
+    "INSERT INTO companies (name, slug, created_at) VALUES (?, ?, ?)"
+  ).run("Family Roofing", DEFAULT_COMPANY_SLUG, new Date().toISOString());
+  defaultCompany = { id: Number(result.lastInsertRowid) };
+  console.log(`[storage] Seeded first company: Family Roofing (slug=${DEFAULT_COMPANY_SLUG})`);
+}
+const DEFAULT_COMPANY_ID = defaultCompany.id;
 
 // ─── Seed / secure default admin account ───────────────────────────────────────
 // Uses ADMIN_USERNAME / ADMIN_PASSWORD env vars if set. Otherwise generates a
@@ -246,15 +322,15 @@ function generateRandomPassword(): string {
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const existingAdmin = sqlite
-  .prepare("SELECT id, password_hash FROM users WHERE username = ?")
-  .get(ADMIN_USERNAME) as { id: number; password_hash: string } | undefined;
+  .prepare("SELECT id, password_hash FROM users WHERE username = ? AND company_id = ?")
+  .get(ADMIN_USERNAME, DEFAULT_COMPANY_ID) as { id: number; password_hash: string } | undefined;
 
 if (!existingAdmin) {
   const password = process.env.ADMIN_PASSWORD || generateRandomPassword();
   const hash = bcrypt.hashSync(password, 10);
   sqlite.prepare(
-    "INSERT INTO users (username, password_hash, role, display_name, created_at) VALUES (?, ?, 'admin', 'Administrator', ?)"
-  ).run(ADMIN_USERNAME, hash, new Date().toISOString());
+    "INSERT INTO users (company_id, username, password_hash, role, display_name, created_at) VALUES (?, ?, ?, 'admin', 'Administrator', ?)"
+  ).run(DEFAULT_COMPANY_ID, ADMIN_USERNAME, hash, new Date().toISOString());
   if (process.env.ADMIN_PASSWORD) {
     console.log(`[storage] Seeded admin account: username=${ADMIN_USERNAME} (password set from ADMIN_PASSWORD)`);
   } else {
@@ -276,40 +352,53 @@ if (!existingAdmin) {
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 export interface IStorage {
+  // Companies
+  getCompanyBySlug(slug: string): Company | undefined;
+  getCompanyById(id: number): Company | undefined;
+
   // Users
-  getUserByUsername(username: string): User | undefined;
+  getUserByUsernameInCompany(companyId: number, username: string): User | undefined;
   getUserById(id: number): User | undefined;
-  getAllUsers(): User[];
-  createUser(data: { username: string; passwordHash: string; role: string; displayName: string }): User;
+  getUsersByCompany(companyId: number): User[];
+  createUser(data: { companyId: number; username: string; passwordHash: string; role: string; displayName: string }): User;
   deleteUser(id: number): void;
   updateUserPassword(id: number, passwordHash: string): void;
 
   // Estimates
-  getAllEstimates(): Estimate[];
-  getEstimatesByUser(userId: number): Estimate[];
+  getEstimatesByCompany(companyId: number): Estimate[];
+  getEstimatesByUserInCompany(userId: number, companyId: number): Estimate[];
   getEstimate(id: number): Estimate | undefined;
   createEstimate(data: InsertEstimate): Estimate;
   updateEstimate(id: number, data: Partial<InsertEstimate>): Estimate | undefined;
   deleteEstimate(id: number): void;
 
-  // Price Defaults (shared price book)
-  getPriceDefaults(): PriceDefaults | undefined;
-  savePriceDefaults(data: Partial<InsertPriceDefaults>): PriceDefaults;
+  // Price Defaults (one price book per company)
+  getPriceDefaultsForCompany(companyId: number): PriceDefaults | undefined;
+  savePriceDefaultsForCompany(companyId: number, data: Partial<InsertPriceDefaults>): PriceDefaults;
 }
 
 export class Storage implements IStorage {
+  // ── Companies ──────────────────────────────────────────────────────────────
+  getCompanyBySlug(slug: string): Company | undefined {
+    return db.select().from(companies).where(eq(companies.slug, slug)).get();
+  }
+  getCompanyById(id: number): Company | undefined {
+    return db.select().from(companies).where(eq(companies.id, id)).get();
+  }
+
   // ── Users ──────────────────────────────────────────────────────────────────
-  getUserByUsername(username: string): User | undefined {
-    return db.select().from(users).where(eq(users.username, username)).get();
+  getUserByUsernameInCompany(companyId: number, username: string): User | undefined {
+    return db.select().from(users).where(and(eq(users.companyId, companyId), eq(users.username, username))).get();
   }
   getUserById(id: number): User | undefined {
     return db.select().from(users).where(eq(users.id, id)).get();
   }
-  getAllUsers(): User[] {
-    return db.select().from(users).all();
+  getUsersByCompany(companyId: number): User[] {
+    return db.select().from(users).where(eq(users.companyId, companyId)).all();
   }
-  createUser(data: { username: string; passwordHash: string; role: string; displayName: string }): User {
+  createUser(data: { companyId: number; username: string; passwordHash: string; role: string; displayName: string }): User {
     return db.insert(users).values({
+      companyId: data.companyId,
       username: data.username,
       passwordHash: data.passwordHash,
       role: data.role,
@@ -325,11 +414,11 @@ export class Storage implements IStorage {
   }
 
   // ── Estimates ──────────────────────────────────────────────────────────────
-  getAllEstimates(): Estimate[] {
-    return db.select().from(estimates).all();
+  getEstimatesByCompany(companyId: number): Estimate[] {
+    return db.select().from(estimates).where(eq(estimates.companyId, companyId)).all();
   }
-  getEstimatesByUser(userId: number): Estimate[] {
-    return db.select().from(estimates).where(eq(estimates.userId, userId)).all();
+  getEstimatesByUserInCompany(userId: number, companyId: number): Estimate[] {
+    return db.select().from(estimates).where(and(eq(estimates.userId, userId), eq(estimates.companyId, companyId))).all();
   }
   getEstimate(id: number): Estimate | undefined {
     return db.select().from(estimates).where(eq(estimates.id, id)).get();
@@ -345,16 +434,16 @@ export class Storage implements IStorage {
   }
 
   // ── Price Defaults ─────────────────────────────────────────────────────────
-  getPriceDefaults(): PriceDefaults | undefined {
-    return db.select().from(priceDefaults).where(eq(priceDefaults.id, 1)).get();
+  getPriceDefaultsForCompany(companyId: number): PriceDefaults | undefined {
+    return db.select().from(priceDefaults).where(eq(priceDefaults.companyId, companyId)).get();
   }
-  savePriceDefaults(data: Partial<InsertPriceDefaults>): PriceDefaults {
-    const existing = this.getPriceDefaults();
-    const payload = { ...data, updatedAt: new Date().toISOString() };
+  savePriceDefaultsForCompany(companyId: number, data: Partial<InsertPriceDefaults>): PriceDefaults {
+    const existing = this.getPriceDefaultsForCompany(companyId);
+    const payload = { ...data, companyId, updatedAt: new Date().toISOString() };
     if (existing) {
-      return db.update(priceDefaults).set(payload).where(eq(priceDefaults.id, 1)).returning().get();
+      return db.update(priceDefaults).set(payload).where(eq(priceDefaults.companyId, companyId)).returning().get();
     }
-    return db.insert(priceDefaults).values({ id: 1, ...payload }).returning().get();
+    return db.insert(priceDefaults).values(payload).returning().get();
   }
 }
 
